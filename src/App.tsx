@@ -12,6 +12,14 @@ function Icon({ name, size = 22 }: { name: string; size?: number }) {
     pill: <><path d="m8 4-4 4a6 6 0 0 0 8 8l4-4a6 6 0 0 0-8-8Z" /><path d="m6 6 8 8" /></>,
     star: <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 2.9 1.1-6.2L3 9.6l6.2-.9Z" />,
     heart: <path d="M20 5c-3-3-6-1-8 1-2-2-5-4-8-1s0 8 8 15c8-7 11-12 8-15Z" />,
+    user: <><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></>,
+    edit: <path d="m15 5 4 4L8 20H4v-4ZM13 7l4 4" />,
+    child: <><circle cx="12" cy="12" r="9" /><path d="M9 10h.01M15 10h.01M9 15a4 4 0 0 0 6 0M12 3c-1 2 0 3 2 3" /></>,
+    bell: <><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4Z" /><path d="M10 21h4" /></>,
+    shield: <><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6Z" /><path d="m9 12 2 2 4-4" /></>,
+    timer: <><circle cx="12" cy="14" r="7" /><path d="M10 3h4m-2 7v4" /></>,
+    trash: <><path d="M4 7h16M10 11v6m4-6v6M6 7l1 13h10l1-13M9 7V4h6v3" /></>,
+    logout: <><path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 17l5-5-5-5M15 12H3" /></>,
   }
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name] || paths.sun}</svg>
 }
@@ -93,8 +101,8 @@ function MedicationHistory({ taken }: { taken: boolean }) {
   const hasFilters = query || date || period !== 'All' || status !== 'All'
   function resetFilters() { setQuery(''); setDate(''); setPeriod('All'); setStatus('All') }
   return <section className="history-page" aria-labelledby="history-title">
-    <div className="history-page-heading"><div><div className="eyebrow">EVERY LITTLE STEP COUNTS</div><h1 id="history-title">Your report</h1></div><span className="history-demo-badge">Demo history</span></div>
-    <div className="history-hero"><img src="/assets/history-bunny.png" alt="A happy MedBunny celebrating with a smiling star" /><div className="history-hero-copy"><span className="history-hero-label">GROWING HEALTHIER, TOGETHER</span><h2>You’re making progress!</h2><p>Every record helps you keep track of the routine.</p><div className="history-stars"><img className="happy-star-icon" src="/assets/happy-star.png" width={23} height={23} alt="" /><strong>{taken ? 25 : 24}</strong><span>stars collected</span></div></div><div className="history-hero-decoration" aria-hidden="true"><img className="happy-star-icon" src="/assets/happy-star.png" width={44} height={44} alt="" /><img className="happy-star-icon" src="/assets/happy-star.png" width={23} height={23} alt="" /></div></div>
+    <div className="history-page-heading"><div><div className="eyebrow">EVERY LITTLE STEP COUNTS</div><h1 id="history-title">Your report</h1></div></div>
+    <div className="history-hero"><img src="/assets/history-bunny.png" alt="A happy MedBunny celebrating with a smiling star" /><div className="history-hero-copy"><span className="history-hero-label">GROWING HEALTHIER, TOGETHER</span><h2>You’re making progress!</h2><p>Every record helps you keep track of the routine.</p><div className="history-stars"><img className="happy-star-icon" src="/assets/happy-star.png" width={32} height={32} alt="" /><strong>{taken ? 25 : 24}</strong><span>stars collected</span></div></div><div className="history-hero-decoration" aria-hidden="true"><img className="happy-star-icon" src="/assets/happy-star.png" width={44} height={44} alt="" /><img className="happy-star-icon" src="/assets/happy-star.png" width={23} height={23} alt="" /></div></div>
     <div className="history-record-heading"><div><h2>Medication history</h2><p>A little care, one dose at a time.</p></div><span>October 2026</span></div>
     <div className="history-filters">
       <label className="history-period"><span className="sr-only">Time period</span><select value={period} onChange={event => setPeriod(event.target.value)}><option>All</option><option>Today</option></select></label>
@@ -143,10 +151,30 @@ function MedicationSchedule() {
   </section>
 }
 
+const profileSettings = [
+  { icon: 'child', title: 'Child Profile', description: 'Nickname and essential basic information', color: 'yellow' },
+  { icon: 'bell', title: 'Notifications', description: 'Reminder and notification preferences', color: 'blue' },
+  { icon: 'shield', title: 'Security', description: 'PIN or authentication for Parent Mode', color: 'sage' },
+  { icon: 'timer', title: 'Kids Mode Settings', description: 'Session length and end-of-play reminders', color: 'lavender' },
+  { icon: 'trash', title: 'Data & Account', description: 'Export or delete data with parent confirmation', color: 'coral' },
+]
+
+function ProfilePage({ onBack, onLogout }: { onBack: () => void; onLogout: () => void }) {
+  return <section className="profile-page" aria-labelledby="profile-title">
+    <div className="add-page-title"><button className="back-medication" onClick={onBack} aria-label="Back"><Icon name="chevron" /></button><div><div className="eyebrow">YOUR FAMILY, YOUR WAY</div><h1 id="profile-title">Profile</h1></div></div>
+    <div className="profile-card">
+      <img className="peeking-bunny" src="/assets/bunny-peeking.png" alt="" />
+      <div className="profile-summary"><span className="profile-photo"><Icon name="user" size={34} /></span><div><h2>Parent Profile</h2><p>Parent or caregiver account</p></div><span className="profile-edit" aria-hidden="true"><Icon name="edit" size={19} /></span></div>
+      <ul className="profile-settings">{profileSettings.map(item => <li className="profile-setting" key={item.title}><span className={`profile-setting-icon ${item.color}`}><Icon name={item.icon} size={21} /></span><div><h3>{item.title}</h3><p>{item.description}</p></div><Icon name="chevron" size={17} /></li>)}</ul>
+    </div>
+    <button className="profile-logout" onClick={onLogout}><Icon name="logout" size={18} />Logout</button>
+  </section>
+}
+
 export default function App() {
   const [page, setPage] = useState('Home')
+  const [previousPage, setPreviousPage] = useState('Home')
   const [taken, setTaken] = useState(false)
-  const [profile, setProfile] = useState(false)
   const [mode, setMode] = useState('Parent mode')
   const [proofOpen, setProofOpen] = useState(false)
   const [proof, setProof] = useState('')
@@ -165,9 +193,9 @@ export default function App() {
       <div className="sidebar-bottom"><span className="little-heart"><Icon name="heart" size={21} /></span><span>A little care,<br />every day.</span></div>
     </aside>
     <main>
-      <header><button className="mode" onClick={() => setMode(mode === 'Parent mode' ? 'Child mode' : 'Parent mode')}>{mode}<Icon name="down" size={16} /></button><button className="avatar" aria-label="Open profile" onClick={() => setProfile(!profile)}>A</button>{profile && <div className="profile-popover"><strong>Alex's family</strong><p>Parent profile</p><button onClick={() => setProfile(false)}>Close profile</button></div>}</header>
+      <header><button className="mode" onClick={() => setMode(mode === 'Parent mode' ? 'Child mode' : 'Parent mode')}>{mode}<Icon name="down" size={16} /></button><button className="avatar" aria-label="Open profile" aria-current={page === 'Profile' ? 'page' : undefined} onClick={() => { if (page !== 'Profile') { setPreviousPage(page); setPage('Profile') } }}>A</button></header>
       <div className="page-content">
-        {page === 'Schedule' ? <MedicationSchedule /> : page === 'History' ? <MedicationHistory taken={taken} /> : <>
+        {page === 'Profile' ? <ProfilePage onBack={() => setPage(previousPage)} onLogout={() => setPage('Home')} /> : page === 'Schedule' ? <MedicationSchedule /> : page === 'History' ? <MedicationHistory taken={taken} /> : <>
         <div className="greeting"><div><div className="eyebrow">A LITTLE CARE GOES A LONG WAY</div><h1>{page === 'Home' ? 'Good morning, Parent!' : page === 'Schedule' ? 'A healthy day, all planned.' : 'Little steps, lovely progress.'}<span className="greeting-sun"><Icon name="sun" size={30} /></span></h1><p>Tuesday, October 27 <span>·</span> Let's make today a healthy one.</p></div><div className="greeting-clock"><span>LOCAL TIME</span><time dateTime="14:00">02.00 <small>PM</small></time></div></div>
         <section className="top-grid">
           <div className="week-card"><div className="section-heading"><h2>Your week at a glance</h2><span className="week-month"><span className="week-month-text">October</span></span></div><div className="week" aria-label="Week of October 25–31, 2026">{['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, i) => <div key={day} className={`week-day${i === 2 ? ' selected' : ''}`} aria-current={i === 2 ? 'date' : undefined}><span>{day}</span><strong>{i + 25}</strong><i className={i < 3 ? 'has-dose' : ''} /></div>)}</div></div>
