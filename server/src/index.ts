@@ -67,13 +67,18 @@ app.onError((error, c) => {
   return apiError(c, 500, 'INTERNAL_ERROR', 'Terjadi kesalahan pada server.')
 })
 
-serve(
-  {
-    fetch: app.fetch,
-    port: env.PORT,
-  },
-  (info) => {
-    console.log(`[medbunny] API berjalan di http://localhost:${info.port}`)
-    console.log(`[medbunny] Dokumentasi: http://localhost:${info.port}/api/docs`)
-  },
-)
+export default app
+
+// Vercel mengimpor `app` sebagai handler; jangan buka listener port di sana.
+if (!process.env.VERCEL) {
+  serve(
+    {
+      fetch: app.fetch,
+      port: env.PORT,
+    },
+    (info) => {
+      console.log(`[medbunny] API berjalan di http://localhost:${info.port}`)
+      console.log(`[medbunny] Dokumentasi: http://localhost:${info.port}/api/docs`)
+    },
+  )
+}
