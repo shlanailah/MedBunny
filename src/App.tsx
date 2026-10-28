@@ -171,7 +171,90 @@ function ProfilePage({ onBack, onLogout }: { onBack: () => void; onLogout: () =>
   </section>
 }
 
+type PublicScreen = 'landing' | 'login' | 'signup' | 'app'
+
+function LandingPage({ onLogin, onSignup }: { onLogin: () => void; onSignup: () => void }) {
+  const problems = [
+    { icon: 'child', title: 'It’s hard to get them to cooperate.', description: 'Your child might refuse or feel scared when it’s time for medicine.', tone: 'peach' },
+    { icon: 'schedule', title: 'Did I give the medicine already?', description: 'Busy days make it hard to remember whether the schedule was followed.', tone: 'sky' },
+    { icon: 'history', title: 'Keeping track is exhausting.', description: 'Schedules, instructions, and records can quickly feel overwhelming.', tone: 'lavender' },
+  ]
+  const features = [
+    { icon: 'schedule', title: 'Medication tracker', description: 'View schedules and dose status.', tone: 'sage' },
+    { icon: 'bell', title: 'Gentle reminders', description: 'Alerts based on your routine.', tone: 'sky' },
+    { icon: 'star', title: 'Bunny’s playtime', description: 'Fun mini-games and activities.', tone: 'sunshine' },
+    { icon: 'history', title: 'Progress & history', description: 'See your child’s medication history.', tone: 'lavender' },
+    { icon: 'shield', title: 'Parent-controlled', description: 'Your account stays in your control.', tone: 'peach' },
+  ]
+  return <div className="landing-page">
+    <header className="landing-header">
+      <button className="landing-brand" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} aria-label="MedBunny, back to top"><img src="/assets/medbunny-wordmark.png" alt="MedBunny" /></button>
+      <nav className="landing-nav" aria-label="Main navigation">
+        <a href="#home">Home</a><a href="#how-it-works">How it works</a><a href="#features">Features</a><a href="#our-story">Our story</a>
+      </nav>
+      <div className="landing-actions"><button className="landing-login" onClick={onLogin}>Log in</button><button className="landing-primary" onClick={onSignup}>Get started</button></div>
+    </header>
+
+    <main className="landing-main">
+      <section className="landing-hero" id="home">
+        <div className="landing-hero-copy"><span className="landing-kicker">A little care, every day</span><h1>Little Doses,<br /><span>Big Adventures.</span></h1><p>Making medicine routines easier for parents and more playful for little ones.</p><div className="landing-hero-actions"><button className="landing-primary" onClick={onSignup}>Get started <Icon name="chevron" size={16} /></button><a className="landing-secondary" href="#how-it-works">See how it works</a></div><div className="landing-trust"><span><Icon name="shield" size={15} />Parent-guided routines</span><span><Icon name="heart" size={15} />Child-friendly play</span></div></div>
+        <div className="landing-hero-art"><span className="landing-orbit orbit-one" /><span className="landing-orbit orbit-two" /><img src="/assets/bunny.png" alt="MedBunny holding a happy star" /><img className="landing-bottle" src="/assets/Kawaii_Heart_Medicine_Bottle.png" alt="" /><span className="landing-star star-one">✦</span><span className="landing-star star-two">✦</span><div className="hero-chip chip-dose" aria-hidden="true"><span><Icon name="bell" size={17} /></span><div><small>Next dose</small><strong>2:00 PM · Ibuprofen</strong></div></div><div className="hero-chip chip-star" aria-hidden="true"><img src="/assets/happy-star.png" alt="" /><div><small>Today</small><strong>+1 star earned!</strong></div></div></div>
+      </section>
+
+      <section className="landing-section problem-section" id="our-story">
+        <div className="landing-section-heading"><span className="landing-kicker">The problem</span><h2>When Medicine Time Becomes a Challenge</h2><p>We understand. You’re not alone.</p></div>
+        <div className="problem-box"><img src="/assets/bunny-peeking.png" alt="MedBunny listening with care" /><div className="problem-grid">{problems.map(problem => <article className={`landing-info-card tone-${problem.tone}`} key={problem.title}><span><Icon name={problem.icon} size={24} /></span><h3>{problem.title}</h3><p>{problem.description}</p></article>)}</div></div>
+      </section>
+
+      <section className="landing-section solution-section">
+        <div className="landing-section-heading"><span className="landing-kicker">Our solution</span><h2>A Little Helper for Your Child’s Medicine Routine</h2><p>MedBunny helps you stay on track with medication schedules, gentle reminders, and fun activities — all in one place.</p><button className="landing-primary" onClick={onSignup}>Explore MedBunny</button></div>
+        <div className="solution-card"><img src="/assets/schedule-bunny.png" alt="MedBunny helping build a healthy routine" /><div className="solution-benefits"><div className="tone-sage"><Icon name="schedule" /><strong>Medication schedule & reminders</strong></div><div className="tone-sky"><Icon name="check" /><strong>Track doses with ease</strong></div><div className="tone-sunshine"><Icon name="star" /><strong>Bunny mascot & mini-games</strong></div><div className="tone-peach"><Icon name="heart" /><strong>One place for you and your child</strong></div></div></div>
+      </section>
+
+      <section className="landing-section how-section" id="how-it-works">
+        <div className="landing-section-heading"><span className="landing-kicker">How it works</span><h2>Small Steps, Easier Routines</h2><p>A simple flow to help you and your child build healthy habits together.</p></div>
+        <div className="steps-card">{[
+          { icon: 'schedule', title: 'Set the schedule', description: 'Enter medication details based on the label or care instructions.' },
+          { icon: 'check', title: 'Track together', description: 'Log doses, check the schedule, and get gentle reminders.' },
+          { icon: 'star', title: 'Play & explore', description: 'Let your child enjoy mini-games and fun activities.' },
+        ].map((step, index) => <article className={`tone-${['sage', 'sky', 'sunshine'][index]}`} key={step.title}><span className="step-number">{index + 1}</span><span className="step-icon"><Icon name={step.icon} size={26} /></span><h3>{step.title}</h3><p>{step.description}</p>{index < 2 && <Icon name="chevron" size={18} />}</article>)}</div>
+      </section>
+
+      <section className="landing-section features-section" id="features">
+        <div className="landing-section-heading"><span className="landing-kicker">Key features</span><h2>More Than a Reminder</h2><p>Thoughtfully designed for both parents and children.</p></div>
+        <div className="features-card">{features.map(feature => <article className={`tone-${feature.tone}`} key={feature.title}><span><Icon name={feature.icon} size={23} /></span><h3>{feature.title}</h3><p>{feature.description}</p></article>)}</div>
+      </section>
+
+      <section className="promise-section"><div><span className="landing-kicker">Our promise</span><h2>Care Comes First</h2><p>We’re here to support your family with safe, simple, and responsible tools.</p></div><img src="/assets/bunny.png" alt="MedBunny holding a heart" /><ul><li><Icon name="check" size={15} />Medication information is managed by you.</li><li><Icon name="check" size={15} />You enter instructions from the label or healthcare professional.</li><li><Icon name="check" size={15} />MedBunny is not a substitute for a doctor or pharmacist.</li><li><Icon name="check" size={15} />Parent access helps protect your child’s data.</li></ul></section>
+      <section className="landing-cta"><img src="/assets/bunny-peeking.png" alt="" /><span className="cta-star cta-star-one" aria-hidden="true">✦</span><span className="cta-star cta-star-two" aria-hidden="true">✦</span><div className="landing-cta-content"><span className="landing-kicker">Ready to make medicine time feel different?</span><h2>A little support for you. A little adventure for them.</h2><div className="landing-cta-actions"><button className="landing-primary" onClick={onSignup}>Create your free account</button><button className="landing-login" onClick={onLogin}>Log in</button></div></div></section>
+    </main>
+    <footer className="landing-footer"><img src="/assets/medbunny-wordmark.png" alt="MedBunny" /><span>Made for little ones. Here for you.</span><button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>Back to top</button></footer>
+  </div>
+}
+
+function AuthPage({ mode, onBack, onSubmit, onSwitch }: { mode: 'login' | 'signup'; onBack: () => void; onSubmit: () => void; onSwitch: () => void }) {
+  const isSignup = mode === 'signup'
+  return <main className="auth-page">
+    <button className="auth-back" onClick={onBack}><Icon name="chevron" size={17} />Back to MedBunny</button>
+    <section className="auth-shell">
+      <div className="auth-art"><img className="auth-wordmark" src="/assets/medbunny-wordmark.png" alt="MedBunny" /><div><span className="landing-kicker">A little care, every day</span><h1>{isSignup ? 'Start a healthier little routine.' : 'Welcome back to your routine.'}</h1><p>{isSignup ? 'Create a parent account and keep every dose in one happy place.' : 'Your family’s schedules, progress, and little wins are waiting.'}</p></div><img className="auth-bunny" src={isSignup ? '/assets/schedule-bunny.png' : '/assets/bunny.png'} alt="MedBunny mascot" /></div>
+      <div className="auth-panel"><span className="landing-kicker">{isSignup ? 'Let’s get started' : 'Welcome back'}</span><h2>{isSignup ? 'Create your account' : 'Log in to MedBunny'}</h2><p>{isSignup ? 'A parent or caregiver account keeps your family routine together.' : 'Enter your details to continue to your home page.'}</p>
+        <form onSubmit={event => { event.preventDefault(); onSubmit() }}>
+          {isSignup && <label>Full name<input name="name" autoComplete="name" required placeholder="Your name" /></label>}
+          <label>Email address<input name="email" type="email" autoComplete="email" required placeholder="parent@example.com" /></label>
+          <label>Password<input name="password" type="password" autoComplete={isSignup ? 'new-password' : 'current-password'} minLength={6} required placeholder="At least 6 characters" /></label>
+          {isSignup && <label>Confirm password<input name="confirm-password" type="password" autoComplete="new-password" minLength={6} required placeholder="Repeat your password" /></label>}
+          <button className="auth-submit" type="submit">{isSignup ? 'Create account' : 'Log in'}<Icon name="chevron" size={17} /></button>
+        </form>
+        <p className="auth-switch">{isSignup ? 'Already have an account?' : 'New to MedBunny?'} <button onClick={onSwitch}>{isSignup ? 'Log in' : 'Create an account'}</button></p>
+        <p className="auth-demo"><Icon name="shield" size={14} />Demo only — account details are not stored.</p>
+      </div>
+    </section>
+  </main>
+}
+
 export default function App() {
+  const [screen, setScreen] = useState<PublicScreen>('landing')
   const [page, setPage] = useState('Home')
   const [previousPage, setPreviousPage] = useState('Home')
   const [taken, setTaken] = useState(false)
@@ -186,6 +269,8 @@ export default function App() {
     setProofError('')
     setProofOpen(true)
   }
+  if (screen === 'landing') return <LandingPage onLogin={() => setScreen('login')} onSignup={() => setScreen('signup')} />
+  if (screen === 'login' || screen === 'signup') return <AuthPage mode={screen} onBack={() => setScreen('landing')} onSwitch={() => setScreen(screen === 'login' ? 'signup' : 'login')} onSubmit={() => { setPage('Home'); setScreen('app') }} />
   return <div className="app">
     <aside className="sidebar">
       <a className="logo" href="#" aria-label="MedBunny home" onClick={() => setPage('Home')}><img src="/assets/logo.png" alt="MedBunny rabbit logo" /></a>
@@ -195,7 +280,7 @@ export default function App() {
     <main>
       <header><button className="mode" onClick={() => setMode(mode === 'Parent mode' ? 'Child mode' : 'Parent mode')}>{mode}<Icon name="down" size={16} /></button><button className="avatar" aria-label="Open profile" aria-current={page === 'Profile' ? 'page' : undefined} onClick={() => { if (page !== 'Profile') { setPreviousPage(page); setPage('Profile') } }}>A</button></header>
       <div className="page-content">
-        {page === 'Profile' ? <ProfilePage onBack={() => setPage(previousPage)} onLogout={() => setPage('Home')} /> : page === 'Schedule' ? <MedicationSchedule /> : page === 'History' ? <MedicationHistory taken={taken} /> : <>
+        {page === 'Profile' ? <ProfilePage onBack={() => setPage(previousPage)} onLogout={() => { setPage('Home'); setScreen('landing') }} /> : page === 'Schedule' ? <MedicationSchedule /> : page === 'History' ? <MedicationHistory taken={taken} /> : <>
         <div className="greeting"><div><div className="eyebrow">A LITTLE CARE GOES A LONG WAY</div><h1>{page === 'Home' ? 'Good morning, Parent!' : page === 'Schedule' ? 'A healthy day, all planned.' : 'Little steps, lovely progress.'}<span className="greeting-sun"><Icon name="sun" size={30} /></span></h1><p>Tuesday, October 27 <span>·</span> Let's make today a healthy one.</p></div><div className="greeting-clock"><span>LOCAL TIME</span><time dateTime="14:00">02.00 <small>PM</small></time></div></div>
         <section className="top-grid">
           <div className="week-card"><div className="section-heading"><h2>Your week at a glance</h2><span className="week-month"><span className="week-month-text">October</span></span></div><div className="week" aria-label="Week of October 25–31, 2026">{['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, i) => <div key={day} className={`week-day${i === 2 ? ' selected' : ''}`} aria-current={i === 2 ? 'date' : undefined}><span>{day}</span><strong>{i + 25}</strong><i className={i < 3 ? 'has-dose' : ''} /></div>)}</div></div>
