@@ -1,0 +1,51 @@
+import type { MiddlewareHandler } from 'hono'
+import { getCookie } from 'hono/cookie'
+import { verify } from 'hono/jwt'
+import { prisma } from '../db.js'
+import { env } from '../env.js'
+import { apiError, isUuid, notFound } from '../lib/errors.js'
+import { SESSION_COOKIE } from '../lib/session.js'
+import type { AppEnv } from '../types.js'
+
+export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
+  const token = getCookie(c, SESSION_COOKIE)
+
+  if (!token) {
+    return apiError(c, 401, 'UNAUTHENTICATED', 'Silakan masuk terlebih dahulu.')
+  }
+
+  let payload: Record<string, unknown>
+  try {
+    payload = await verify(token, env.JWT_SECRET, 'HS256')
+  } catch {
+    return apiError(c, 401, 'UNAUTHENTICATED', 'Sesi sudah berakhir. Silakan masuk lagi.')
+  }
+
+  if (typeof payload.sub !== 'string' || !isUuid(payload.sub)) {
+    return apiError(c, 401, 'UNAUTHENTICATED', 'Sesi tidak valid. Silakan masuk lagi.')
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: payload.sub } })
+  if (!user) {
+    return apiError(c, 401, 'UNAUTHENTICATED', 'Akun tidak ditemukan. Silakan masuk lagi.')
+  }
+
+  c.set('user', user)
+  await next()
+}
+
+export const requireChildAccess: MiddlewareHandler<AppEnv> = async (c, next) => {
+  const childId = c.req.param('childId')
+  if (!childId || !isUuid(childId)) return notFound(c)
+
+  const user = c.get('user')
+  const child = await prisma.child.findFirst({
+    where: { id: childId, userId: user.id },
+  })
+
+  // 404 (bukan 403) supaya keberadaan data milik pengguna lain tidak bisa ditebak.
+  if (!child) return notFound(c)
+
+  c.set('child', child)
+  await next()
+}

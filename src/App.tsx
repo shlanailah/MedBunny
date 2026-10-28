@@ -1,4 +1,16 @@
-import { useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
+import {
+  api,
+  ApiError,
+  formatApiDate,
+  type Child,
+  type DoseLog,
+  type DoseStatus,
+  type Medication,
+  type MedicationDraft,
+  type Session,
+  type SessionUser,
+} from './lib/api'
 
 function Icon({ name, size = 22 }: { name: string; size?: number }) {
   const paths: Record<string, React.ReactNode> = {
@@ -24,15 +36,44 @@ function Icon({ name, size = 22 }: { name: string; size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name] || paths.sun}</svg>
 }
 
-const medicines = [
-  { name: 'Lisinopril', dose: '10 mg', instruction: 'After a meal', time: '8:00 AM', color: 'coral' },
-  { name: 'Vitamin D3', dose: '15ml', instruction: 'After a meal', time: '8:00 AM', color: 'yellow' },
-  { name: 'Ibuprofen', dose: '400 mg', instruction: 'After a meal', time: '2:00 PM', color: 'blue' },
-]
+const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
-type Medication = { id: number; name: string; dose: string; note: string; time: string; startDate: string; frequency: string; times: string[]; meal: string; days: string[] }
+function startOfWeek(date: Date) {
+  const copy = new Date(date)
+  copy.setDate(copy.getDate() - copy.getDay())
+  copy.setHours(0, 0, 0, 0)
+  return copy
+}
 
-function AddMedication({ onBack, initial, onSave }: { onBack: () => void; initial?: Medication; onSave: (medication: Medication) => void }) {
+function addDays(date: Date, amount: number) {
+  const copy = new Date(date)
+  copy.setDate(copy.getDate() + amount)
+  return copy
+}
+
+function timeLabel(value: string) {
+  return new Date(value).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+}
+
+function monthLabel(dateKeyValue: string, withDay = false) {
+  const date = new Date(`${dateKeyValue}T12:00:00`)
+  return date.toLocaleDateString('en-US', withDay
+    ? { month: 'long', day: 'numeric', year: 'numeric' }
+    : { month: 'long', year: 'numeric' })
+}
+
+function doseBucket(value: string) {
+  const hour = new Date(value).getHours()
+  if (hour < 12) return 'Morning'
+  if (hour < 18) return 'Afternoon'
+  return 'Evening'
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof ApiError ? error.message : 'Terjadi kesalahan. Coba lagi sebentar.'
+}
+
+function AddMedication({ onBack, initial, onSave }: { onBack: () => void; initial?: Medication; onSave: (medication: MedicationDraft) => Promise<void> }) {
   const [frequency, setFrequency] = useState(initial?.frequency ?? 'Every day')
   const [times, setTimes] = useState(initial?.times ?? ['08:00', '14:00', '22:00'])
   const [meal, setMeal] = useState(initial?.meal ?? 'Anytime')
@@ -43,7 +84,30 @@ function AddMedication({ onBack, initial, onSave }: { onBack: () => void; initia
   const [note, setNote] = useState(initial?.note ?? '')
   const [reviewing, setReviewing] = useState(Boolean(initial))
   const [dayError, setDayError] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
   function backToEdit() { setReviewing(false) }
+  async function saveMedication() {
+    setSaving(true)
+    setSaveError('')
+    try {
+      await onSave({
+        name: name.trim(),
+        dose: dose.trim(),
+        startDate,
+        note: note.trim(),
+        frequency,
+        times: frequency === 'As needed' ? [] : times,
+        time: frequency === 'As needed' ? '' : (times[0] ?? ''),
+        meal,
+        days: frequency === 'Some days' ? days : [],
+      })
+    } catch (error) {
+      setSaveError(errorMessage(error))
+    } finally {
+      setSaving(false)
+    }
+  }
   if (reviewing) return <section className="add-medication-page review-page" aria-labelledby="review-title">
     <div className="add-page-title"><button className="back-medication" onClick={onBack} aria-label="Back to medications"><Icon name="chevron" /></button><div><div className="eyebrow">A LITTLE CHECK, A LOT OF CARE</div><h1 id="review-title">{initial ? 'Edit Medication' : 'Add Medication'}</h1></div></div>
     <div className="review-content">
@@ -56,8 +120,8 @@ function AddMedication({ onBack, initial, onSave }: { onBack: () => void; initia
         {frequency === 'As needed' ? <p className="review-as-needed">No fixed schedule. Follow your healthcare professional’s instructions.</p> : times.map((time, index) => <div className="review-time-row" key={index}><span className="medicine-icon"><Icon name="history" size={20} /></span><div><strong>Time {index + 1} · {Number(time.slice(0, 2)) < 12 ? 'Morning' : Number(time.slice(0, 2)) < 18 ? 'Afternoon' : 'Evening'}</strong><p>{dose} each time</p></div><button className="review-time-edit" onClick={backToEdit} aria-label={`Edit dose ${index + 1} time`}><time>{time}</time><Icon name="chevron" size={14} /></button></div>)}
       </article>
       <div className="review-instructions"><article className="review-card"><h2>Meal instructions</h2><p>{meal}</p><button className="review-edit" onClick={backToEdit}>Edit</button></article><article className="review-card"><h2>Additional instructions</h2><p>{note || 'No additional notes'}</p><button className="review-edit" onClick={backToEdit}>Edit</button></article></div>
-      <p className="review-demo-note">Changes are kept in this demo only, not saved permanently.</p>
-      <div className="review-actions"><button className="review-save" onClick={() => onSave({ id: initial?.id ?? Date.now(), name: name.trim(), dose: dose.trim(), startDate, note: note.trim(), frequency, times: frequency === 'As needed' ? [] : times, time: frequency === 'As needed' ? '' : times[0], meal, days: frequency === 'Some days' ? days : [] })}><Icon name="check" size={18} />Save</button><button className="review-back" onClick={backToEdit}>Back to edit</button></div>
+      {saveError && <p className="proof-error" role="alert">{saveError}</p>}
+      <div className="review-actions"><button className="review-save" disabled={saving} onClick={() => void saveMedication()}>{saving ? 'Saving…' : <><Icon name="check" size={18} />Save</>}</button><button className="review-back" onClick={backToEdit} disabled={saving}>Back to edit</button></div>
     </div>
   </section>
   return <section className="add-medication-page" aria-labelledby="add-title">
@@ -84,70 +148,136 @@ function AddMedication({ onBack, initial, onSave }: { onBack: () => void; initia
   </section>
 }
 
-function MedicationHistory({ taken }: { taken: boolean }) {
+function MedicationHistory({ childId }: { childId: string }) {
   const [query, setQuery] = useState('')
   const [period, setPeriod] = useState('All')
   const [date, setDate] = useState('')
   const [status, setStatus] = useState('All')
-  const rows = [
-    { id: 1, name: 'Lisinopril', dose: '10 mg', date: '2026-10-27', time: '08:04 AM', status: 'Recorded', color: 'coral' },
-    { id: 2, name: 'Vitamin D3', dose: '15ml', date: '2026-10-27', time: '08:04 AM', status: 'Recorded', color: 'yellow' },
-    { id: 3, name: 'Ibuprofen', dose: '400 mg', date: '2026-10-27', time: '02:00 PM', status: taken ? 'Recorded' : 'Awaiting', color: 'blue' },
-    { id: 4, name: 'Lisinopril', dose: '10 mg', date: '2026-10-26', time: '08:02 AM', status: 'Recorded', color: 'coral' },
-    { id: 5, name: 'Vitamin D3', dose: '15ml', date: '2026-10-26', time: '08:00 AM', status: 'Missed', color: 'yellow' },
-    { id: 6, name: 'Ibuprofen', dose: '400 mg', date: '2026-10-26', time: '02:06 PM', status: 'Recorded', color: 'blue' },
-  ]
-  const filtered = rows.filter(row => row.name.toLowerCase().includes(query.trim().toLowerCase()) && (period !== 'Today' || row.date === '2026-10-27') && (!date || row.date === date) && (status === 'All' || row.status === status))
-  const hasFilters = query || date || period !== 'All' || status !== 'All'
+  const [rows, setRows] = useState<DoseLog[]>([])
+  const [balance, setBalance] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
+
+  const today = formatApiDate(new Date())
+  const now = new Date()
+  const monthStart = formatApiDate(new Date(now.getFullYear(), now.getMonth(), 1))
+  const monthEnd = formatApiDate(new Date(now.getFullYear(), now.getMonth() + 1, 0))
+  const from = date || (period === 'Today' ? today : monthStart)
+  const to = date || (period === 'Today' ? today : monthEnd)
+
+  useEffect(() => {
+    let cancelled = false
+    api.getStars(childId)
+      .then(result => { if (!cancelled) setBalance(result.balance) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [childId, reloadKey])
+
+  useEffect(() => {
+    let cancelled = false
+    const timer = window.setTimeout(() => {
+      setLoading(true)
+      setLoadError('')
+      api.listDoses(childId, {
+        from,
+        to,
+        status: status === 'All' ? undefined : status.toLowerCase() as DoseStatus,
+        q: query.trim() || undefined,
+      })
+        .then(result => { if (!cancelled) setRows(result) })
+        .catch(error => { if (!cancelled) setLoadError(errorMessage(error)) })
+        .finally(() => { if (!cancelled) setLoading(false) })
+    }, query.trim() ? 250 : 0)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [childId, from, to, status, query, reloadKey])
+
+  const hasFilters = Boolean(query || date || period !== 'All' || status !== 'All')
   function resetFilters() { setQuery(''); setDate(''); setPeriod('All'); setStatus('All') }
+
   return <section className="history-page" aria-labelledby="history-title">
     <div className="history-page-heading"><div><div className="eyebrow">EVERY LITTLE STEP COUNTS</div><h1 id="history-title">Your report</h1></div></div>
-    <div className="history-hero"><img src="/assets/history-bunny.png" alt="A happy MedBunny celebrating with a smiling star" /><div className="history-hero-copy"><span className="history-hero-label">GROWING HEALTHIER, TOGETHER</span><h2>You’re making progress!</h2><p>Every record helps you keep track of the routine.</p><div className="history-stars"><img className="happy-star-icon" src="/assets/happy-star.png" width={32} height={32} alt="" /><strong>{taken ? 25 : 24}</strong><span>stars collected</span></div></div><div className="history-hero-decoration" aria-hidden="true"><img className="happy-star-icon" src="/assets/happy-star.png" width={44} height={44} alt="" /><img className="happy-star-icon" src="/assets/happy-star.png" width={23} height={23} alt="" /></div></div>
-    <div className="history-record-heading"><div><h2>Medication history</h2><p>A little care, one dose at a time.</p></div><span>October 2026</span></div>
+    <div className="history-hero"><img src="/assets/history-bunny.png" alt="A happy MedBunny celebrating with a smiling star" /><div className="history-hero-copy"><span className="history-hero-label">GROWING HEALTHIER, TOGETHER</span><h2>You’re making progress!</h2><p>Every record helps you keep track of the routine.</p><div className="history-stars"><img className="happy-star-icon" src="/assets/happy-star.png" width={32} height={32} alt="" /><strong>{balance}</strong><span>stars collected</span></div></div><div className="history-hero-decoration" aria-hidden="true"><img className="happy-star-icon" src="/assets/happy-star.png" width={44} height={44} alt="" /><img className="happy-star-icon" src="/assets/happy-star.png" width={23} height={23} alt="" /></div></div>
+    <div className="history-record-heading"><div><h2>Medication history</h2><p>A little care, one dose at a time.</p></div><span>{date ? monthLabel(date, true) : period === 'Today' ? 'Today' : monthLabel(from)}</span></div>
     <div className="history-filters">
-      <label className="history-period"><span className="sr-only">Time period</span><select value={period} onChange={event => setPeriod(event.target.value)}><option>All</option><option>Today</option></select></label>
+      <label className="history-period"><span className="sr-only">Time period</span><select value={period} onChange={event => { setPeriod(event.target.value); setDate('') }}><option>All</option><option>Today</option></select></label>
       <label className="history-search"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><circle cx="10" cy="10" r="7" /><path d="m15 15 6 6" /></svg><span className="sr-only">Search medication name</span><input type="search" placeholder="Search medication name" value={query} onChange={event => setQuery(event.target.value)} /></label>
       <label className="history-date"><span>Date</span><input type="date" aria-label="Filter by date" value={date} onChange={event => setDate(event.target.value)} /></label>
       <label className="history-status"><span className="sr-only">Filter by status</span><select value={status} onChange={event => setStatus(event.target.value)}><option value="All">Status</option><option>Recorded</option><option>Awaiting</option><option>Missed</option><option>Upcoming</option></select></label>
     </div>
-    <div className="history-result-info" aria-live="polite"><span>{filtered.length} {filtered.length === 1 ? 'record' : 'records'}</span>{hasFilters && <button onClick={resetFilters}>Clear filters</button>}</div>
+    <div className="history-result-info" aria-live="polite"><span>{loading ? 'Loading…' : `${rows.length} ${rows.length === 1 ? 'record' : 'records'}`}</span>{hasFilters && <button onClick={resetFilters}>Clear filters</button>}</div>
     <div className="history-records">
       <div className="history-table-heading" aria-hidden="true"><span>MEDICATION</span><span>DATE</span><span>TIME</span><span>STATUS</span></div>
-      {filtered.map(row => <article className="history-record" key={row.id}><div className="history-medication"><span className={`medicine-icon ${row.color}`}><Icon name="pill" size={21} /></span><div><h3>{row.name}</h3><p>{row.dose}</p></div></div><time className="history-record-date" dateTime={row.date}>{new Date(`${row.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</time><span className="history-record-time">{row.time}</span><span className={`history-record-status ${row.status.toLowerCase().split(' ')[0]}`}><Icon name={row.status === 'Recorded' ? 'check' : 'history'} size={14} />{row.status}</span></article>)}
-      {!filtered.length && <div className="history-empty"><Icon name="history" size={33} /><h3>No records found</h3><p>Try another medication name, date, or status.</p><button onClick={resetFilters}>Clear filters</button></div>}
+      {loading && <div className="history-empty"><p>Loading your records…</p></div>}
+      {!loading && loadError && <div className="history-empty"><Icon name="history" size={33} /><h3>Could not load records</h3><p>{loadError}</p><button onClick={() => setReloadKey(key => key + 1)}>Try again</button></div>}
+      {!loading && !loadError && rows.map((row, index) => {
+        const scheduled = new Date(row.scheduledAt)
+        const statusLabel = row.status.charAt(0).toUpperCase() + row.status.slice(1)
+        return <article className="history-record" key={row.id}><div className="history-medication"><span className={`medicine-icon ${['coral', 'yellow', 'blue'][index % 3]}`}><Icon name="pill" size={21} /></span><div><h3>{row.medicationName}</h3><p>{row.dose}</p></div></div><time className="history-record-date" dateTime={row.scheduledAt}>{scheduled.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</time><span className="history-record-time">{timeLabel(row.scheduledAt)}</span><span className={`history-record-status ${row.status}`}><Icon name={row.status === 'recorded' ? 'check' : 'history'} size={14} />{statusLabel}</span></article>
+      })}
+      {!loading && !loadError && !rows.length && <div className="history-empty"><Icon name="history" size={33} /><h3>No records found</h3><p>Try another medication name, date, or status.</p>{hasFilters && <button onClick={resetFilters}>Clear filters</button>}</div>}
     </div>
-    <p className="history-note"><Icon name="heart" size={14} />Sample records for this demo. Your care and consistency make a difference.</p>
+    <p className="history-note"><Icon name="heart" size={14} />Your records are saved to your account. Your care and consistency make a difference.</p>
   </section>
 }
 
-function MedicationSchedule() {
-  const [items, setItems] = useState<Medication[]>([
-    { id: 1, name: 'Amoxicillin', dose: '500 mg', note: '', time: '08:00', startDate: '2026-10-27', frequency: 'Every day', times: ['08:00'], meal: 'Anytime', days: [] },
-    { id: 2, name: 'Amoxicillin', dose: '500 mg', note: '', time: '20:00', startDate: '2026-10-27', frequency: 'Every day', times: ['20:00'], meal: 'Anytime', days: [] },
-  ])
-  const [editing, setEditing] = useState<number | 'new' | null>(null)
+function MedicationSchedule({ childId, onChanged }: { childId: string; onChanged: () => void }) {
+  const [items, setItems] = useState<Medication[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [editing, setEditing] = useState<string | 'new' | null>(null)
   const [notice, setNotice] = useState('')
-  function saveMedication(medication: Medication) {
-    setItems(previous => editing === 'new' ? [...previous, medication] : previous.map(item => item.id === editing ? medication : item))
-    setNotice(editing === 'new' ? 'Medication added to your schedule.' : 'Medication updated.')
-    setEditing(null)
+
+  async function loadMedications() {
+    setLoading(true)
+    setLoadError('')
+    try {
+      setItems(await api.listMedications(childId))
+    } catch (error) {
+      setLoadError(errorMessage(error))
+    } finally {
+      setLoading(false)
+    }
   }
+
+  useEffect(() => {
+    void loadMedications()
+  }, [childId])
+
+  async function saveMedication(medication: MedicationDraft) {
+    if (editing === 'new') {
+      const created = await api.createMedication(childId, medication)
+      setItems(previous => [...previous, created])
+      setNotice('Medication added to your schedule.')
+    } else if (editing) {
+      const updated = await api.updateMedication(editing, medication)
+      setItems(previous => previous.map(item => item.id === editing ? updated : item))
+      setNotice('Medication updated.')
+    }
+    setEditing(null)
+    onChanged()
+  }
+
   const current = items.find(item => item.id === editing)
   if (editing !== null) return <AddMedication initial={current} onBack={() => setEditing(null)} onSave={saveMedication} />
+
   return <section className="medication-page" aria-labelledby="medications-title">
     <div className="medication-page-heading">
       <div><div className="eyebrow">LITTLE DOSES, LOVING CARE</div><h1 id="medications-title">Your Medication</h1><p>Keep every little dose in one happy place.</p></div>
       <button className="add-medication" onClick={() => setEditing('new')}>Add medication <span aria-hidden="true">+</span></button>
     </div>
     <div className="medication-page-meta"><Icon name="schedule" size={16} /><span>{items.length} scheduled doses</span><span className="medication-parent-note">Managed by a parent or caregiver</span></div>
-    <div className="medication-list">{items.map((item, index) => <article className={`medication-entry medication-entry-${index % 3}`} key={item.id}>
+    {loading ? <div className="history-empty"><p>Loading medications…</p></div> : loadError ? <div className="history-empty"><Icon name="pill" size={33} /><h3>Could not load medications</h3><p>{loadError}</p><button onClick={() => void loadMedications()}>Try again</button></div> : items.length ? <div className="medication-list">{items.map((item, index) => <article className={`medication-entry medication-entry-${index % 3}`} key={item.id}>
       <span className="medication-entry-icon"><img className="medicine-illustration" src="/assets/Kawaii_Heart_Medicine_Bottle.png" alt="" /></span>
       <div className="medication-entry-copy"><h2>{item.name} <span>{item.dose}</span></h2><span className="medication-time">{item.meal} · {item.frequency === 'As needed' ? 'As needed' : `${item.times.length} ${item.times.length === 1 ? 'time' : 'times'} a day`}{item.frequency === 'Some days' && ` · ${item.days.join(', ')}`}</span></div>
       <button className="edit-medication" onClick={() => setEditing(item.id)} aria-label={`Edit ${item.name} at ${item.time}`}>Edit<Icon name="chevron" size={15} /></button>
-    </article>)}</div>
+    </article>)}</div> : <div className="history-empty"><Icon name="pill" size={33} /><h3>No medications yet</h3><p>Add the first medication to build your routine.</p><button onClick={() => setEditing('new')}>Add medication</button></div>}
     <p className="medication-notice" role="status">{notice}</p>
     <div className="schedule-mascot"><img src="/assets/schedule-bunny.png" alt="MedBunny holding a star in a flower garden" /><p>Small routines,<br /><strong>bright futures.</strong></p></div>
-
   </section>
 }
 
@@ -159,12 +289,12 @@ const profileSettings = [
   { icon: 'trash', title: 'Data & Account', description: 'Export or delete data with parent confirmation', color: 'coral' },
 ]
 
-function ProfilePage({ onBack, onLogout }: { onBack: () => void; onLogout: () => void }) {
+function ProfilePage({ user, child, onBack, onLogout }: { user: SessionUser; child?: Child; onBack: () => void; onLogout: () => void }) {
   return <section className="profile-page" aria-labelledby="profile-title">
     <div className="add-page-title"><button className="back-medication" onClick={onBack} aria-label="Back"><Icon name="chevron" /></button><div><div className="eyebrow">YOUR FAMILY, YOUR WAY</div><h1 id="profile-title">Profile</h1></div></div>
     <div className="profile-card">
       <img className="peeking-bunny" src="/assets/bunny-peeking.png" alt="" />
-      <div className="profile-summary"><span className="profile-photo"><Icon name="user" size={34} /></span><div><h2>Parent Profile</h2><p>Parent or caregiver account</p></div><span className="profile-edit" aria-hidden="true"><Icon name="edit" size={19} /></span></div>
+      <div className="profile-summary"><span className="profile-photo"><Icon name="user" size={34} /></span><div><h2>{user.name}</h2><p>{user.email}</p>{child?.nickname && <p>Child nickname: {child.nickname}</p>}</div><span className="profile-edit" aria-hidden="true"><Icon name="edit" size={19} /></span></div>
       <ul className="profile-settings">{profileSettings.map(item => <li className="profile-setting" key={item.title}><span className={`profile-setting-icon ${item.color}`}><Icon name={item.icon} size={21} /></span><div><h3>{item.title}</h3><p>{item.description}</p></div><Icon name="chevron" size={17} /></li>)}</ul>
     </div>
     <button className="profile-logout" onClick={onLogout}><Icon name="logout" size={18} />Logout</button>
@@ -213,7 +343,7 @@ function LandingPage({ onLogin, onSignup }: { onLogin: () => void; onSignup: () 
 
       <section className="landing-section how-section" id="how-it-works">
         <div className="landing-section-heading"><span className="landing-kicker">How it works</span><h2>Small Steps, Easier Routines</h2><p>A simple flow to help you and your child build healthy habits together.</p></div>
-        <div className="steps-card">{[
+        <div className="steps-card">{[ 
           { icon: 'schedule', title: 'Set the schedule', description: 'Enter medication details based on the label or care instructions.' },
           { icon: 'check', title: 'Track together', description: 'Log doses, check the schedule, and get gentle reminders.' },
           { icon: 'star', title: 'Play & explore', description: 'Let your child enjoy mini-games and fun activities.' },
@@ -232,22 +362,49 @@ function LandingPage({ onLogin, onSignup }: { onLogin: () => void; onSignup: () 
   </div>
 }
 
-function AuthPage({ mode, onBack, onSubmit, onSwitch }: { mode: 'login' | 'signup'; onBack: () => void; onSubmit: () => void; onSwitch: () => void }) {
+function AuthPage({ mode, onBack, onSubmit, onSwitch }: { mode: 'login' | 'signup'; onBack: () => void; onSubmit: (input: { name: string; email: string; password: string }) => Promise<void>; onSwitch: () => void }) {
   const isSignup = mode === 'signup'
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    setError('')
+
+    if (isSignup && password !== confirmPassword) {
+      setError('Passwords do not match.')
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      await onSubmit({ name: name.trim(), email: email.trim(), password })
+    } catch (submitError) {
+      setError(errorMessage(submitError))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   return <main className="auth-page">
     <button className="auth-back" onClick={onBack}><Icon name="chevron" size={17} />Back to MedBunny</button>
     <section className="auth-shell">
       <div className="auth-art"><img className="auth-wordmark" src="/assets/medbunny-wordmark.png" alt="MedBunny" /><div><span className="landing-kicker">A little care, every day</span><h1>{isSignup ? 'Start a healthier little routine.' : 'Welcome back to your routine.'}</h1><p>{isSignup ? 'Create a parent account and keep every dose in one happy place.' : 'Your family’s schedules, progress, and little wins are waiting.'}</p></div><img className="auth-bunny" src={isSignup ? '/assets/schedule-bunny.png' : '/assets/bunny.png'} alt="MedBunny mascot" /></div>
       <div className="auth-panel"><span className="landing-kicker">{isSignup ? 'Let’s get started' : 'Welcome back'}</span><h2>{isSignup ? 'Create your account' : 'Log in to MedBunny'}</h2><p>{isSignup ? 'A parent or caregiver account keeps your family routine together.' : 'Enter your details to continue to your home page.'}</p>
-        <form onSubmit={event => { event.preventDefault(); onSubmit() }}>
-          {isSignup && <label>Full name<input name="name" autoComplete="name" required placeholder="Your name" /></label>}
-          <label>Email address<input name="email" type="email" autoComplete="email" required placeholder="parent@example.com" /></label>
-          <label>Password<input name="password" type="password" autoComplete={isSignup ? 'new-password' : 'current-password'} minLength={6} required placeholder="At least 6 characters" /></label>
-          {isSignup && <label>Confirm password<input name="confirm-password" type="password" autoComplete="new-password" minLength={6} required placeholder="Repeat your password" /></label>}
-          <button className="auth-submit" type="submit">{isSignup ? 'Create account' : 'Log in'}<Icon name="chevron" size={17} /></button>
+        <form onSubmit={event => void submit(event)}>
+          {isSignup && <label>Full name<input name="name" autoComplete="name" required placeholder="Your name" value={name} onChange={event => setName(event.target.value)} /></label>}
+          <label>Email address<input name="email" type="email" autoComplete="email" required placeholder="parent@example.com" value={email} onChange={event => setEmail(event.target.value)} /></label>
+          <label>Password<input name="password" type="password" autoComplete={isSignup ? 'new-password' : 'current-password'} minLength={6} required placeholder="At least 6 characters" value={password} onChange={event => setPassword(event.target.value)} /></label>
+          {isSignup && <label>Confirm password<input name="confirm-password" type="password" autoComplete="new-password" minLength={6} required placeholder="Repeat your password" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} /></label>}
+          {error && <p className="proof-error auth-error" role="alert">{error}</p>}
+          <button className="auth-submit" type="submit" disabled={submitting}>{submitting ? (isSignup ? 'Creating account…' : 'Logging in…') : <>{isSignup ? 'Create account' : 'Log in'}<Icon name="chevron" size={17} /></>}</button>
         </form>
         <p className="auth-switch">{isSignup ? 'Already have an account?' : 'New to MedBunny?'} <button onClick={onSwitch}>{isSignup ? 'Log in' : 'Create an account'}</button></p>
-        <p className="auth-demo"><Icon name="shield" size={14} />Demo only — account details are not stored.</p>
+        <p className="auth-demo"><Icon name="shield" size={14} />Your account and your family’s routine stay private.</p>
       </div>
     </section>
   </main>
@@ -255,49 +412,207 @@ function AuthPage({ mode, onBack, onSubmit, onSwitch }: { mode: 'login' | 'signu
 
 export default function App() {
   const [screen, setScreen] = useState<PublicScreen>('landing')
+  const [session, setSession] = useState<Session | null>(null)
+  const [checkingSession, setCheckingSession] = useState(true)
   const [page, setPage] = useState('Home')
   const [previousPage, setPreviousPage] = useState('Home')
-  const [taken, setTaken] = useState(false)
   const [mode, setMode] = useState('Parent mode')
+  const [now, setNow] = useState(new Date())
   const [proofOpen, setProofOpen] = useState(false)
   const [proof, setProof] = useState('')
   const [proofName, setProofName] = useState('')
   const [proofError, setProofError] = useState('')
-  function openProof() {
+  const [activeDose, setActiveDose] = useState<DoseLog | null>(null)
+  const [confirming, setConfirming] = useState(false)
+  const [confirmError, setConfirmError] = useState('')
+  const [homeRefresh, setHomeRefresh] = useState(0)
+  const [homeData, setHomeData] = useState<{ weekDoses: DoseLog[]; balance: number }>({ weekDoses: [], balance: 0 })
+  const [homeLoading, setHomeLoading] = useState(true)
+  const [homeError, setHomeError] = useState('')
+
+  const child = session?.children[0]
+
+  useEffect(() => {
+    let cancelled = false
+    api.me()
+      .then(result => {
+        if (cancelled) return
+        setSession(result)
+        setScreen('app')
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setCheckingSession(false)
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setSession(null)
+      setScreen('login')
+    }
+    window.addEventListener('medbunny:unauthorized', handleUnauthorized)
+    return () => window.removeEventListener('medbunny:unauthorized', handleUnauthorized)
+  }, [])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 30000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    if (!child) return
+    let cancelled = false
+    const weekStart = startOfWeek(new Date())
+    const weekEnd = addDays(weekStart, 6)
+
+    setHomeLoading(true)
+    setHomeError('')
+
+    Promise.all([
+      api.listDoses(child.id, { from: formatApiDate(weekStart), to: formatApiDate(weekEnd) }),
+      api.getStars(child.id),
+    ])
+      .then(([weekDoses, stars]) => {
+        if (cancelled) return
+        setHomeData({ weekDoses, balance: stars.balance })
+      })
+      .catch(error => {
+        if (!cancelled) setHomeError(errorMessage(error))
+      })
+      .finally(() => {
+        if (!cancelled) setHomeLoading(false)
+      })
+
+    return () => { cancelled = true }
+  }, [child?.id, homeRefresh])
+
+  async function handleAuthSubmit(input: { name: string; email: string; password: string }) {
+    const result = screen === 'signup'
+      ? await api.signup(input)
+      : await api.login({ email: input.email, password: input.password })
+
+    setSession(result)
+    setPage('Home')
+    setScreen('app')
+  }
+
+  async function handleLogout() {
+    try {
+      await api.logout()
+    } catch {
+      // Tetap bersihkan sesi lokal kalau server tidak bisa dihubungi.
+    }
+    setSession(null)
+    setPage('Home')
+    setScreen('landing')
+  }
+
+  function openProof(dose: DoseLog) {
+    setActiveDose(dose)
     setProof('')
     setProofName('')
     setProofError('')
+    setConfirmError('')
     setProofOpen(true)
   }
+
+  async function handleConfirm(event: FormEvent) {
+    event.preventDefault()
+    if (!activeDose) return
+
+    setConfirming(true)
+    setConfirmError('')
+    try {
+      await api.confirmDose(activeDose.id)
+      setProofOpen(false)
+      setActiveDose(null)
+      setProof('')
+      setProofName('')
+      setHomeRefresh(value => value + 1)
+    } catch (error) {
+      if (error instanceof ApiError && error.code === 'ALREADY_CONFIRMED') {
+        setProofOpen(false)
+        setActiveDose(null)
+        setHomeRefresh(value => value + 1)
+      } else {
+        setConfirmError(errorMessage(error))
+      }
+    } finally {
+      setConfirming(false)
+    }
+  }
+
+  if (checkingSession) {
+    return <div className="app-loading"><img src="/assets/bunny-sleeping.png" alt="" /><p>Getting your routine ready…</p></div>
+  }
+
   if (screen === 'landing') return <LandingPage onLogin={() => setScreen('login')} onSignup={() => setScreen('signup')} />
-  if (screen === 'login' || screen === 'signup') return <AuthPage mode={screen} onBack={() => setScreen('landing')} onSwitch={() => setScreen(screen === 'login' ? 'signup' : 'login')} onSubmit={() => { setPage('Home'); setScreen('app') }} />
+  if (screen === 'login' || screen === 'signup') return <AuthPage mode={screen} onBack={() => setScreen('landing')} onSwitch={() => setScreen(screen === 'login' ? 'signup' : 'login')} onSubmit={handleAuthSubmit} />
+
+  if (!session) return <LandingPage onLogin={() => setScreen('login')} onSignup={() => setScreen('signup')} />
+  if (!child) return <div className="app-loading"><img src="/assets/bunny-sleeping.png" alt="" /><p>No child profile found for this account.</p></div>
+
+  const todayKey = formatApiDate(now)
+  const todayDoses = homeData.weekDoses
+    .filter(dose => formatApiDate(new Date(dose.scheduledAt)) === todayKey)
+    .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))
+  const takenCount = todayDoses.filter(dose => dose.confirmedAt).length
+  const allDone = todayDoses.length > 0 && takenCount === todayDoses.length
+  const nextDose = todayDoses.find(dose => !dose.confirmedAt) ?? null
+  const progressPercent = todayDoses.length ? Math.round((takenCount / todayDoses.length) * 100) : 0
+  const weekStart = startOfWeek(now)
+  const weekEnd = addDays(weekStart, 6)
+  const weekDays = Array.from({ length: 7 }, (_, index) => {
+    const day = addDays(weekStart, index)
+    const key = formatApiDate(day)
+    return {
+      label: WEEKDAY_LABELS[day.getDay()],
+      date: day.getDate(),
+      key,
+      isToday: key === todayKey,
+      hasDose: homeData.weekDoses.some(dose => formatApiDate(new Date(dose.scheduledAt)) === key),
+    }
+  })
+  const groupedDoses = ['Morning', 'Afternoon', 'Evening']
+    .map(name => ({ name, doses: todayDoses.filter(dose => doseBucket(dose.scheduledAt) === name) }))
+    .filter(group => group.doses.length > 0)
+  const nextDoseTime = nextDose ? timeLabel(nextDose.scheduledAt).split(' ') : []
+  const avatarLetter = session.user.name.trim().charAt(0).toUpperCase() || 'P'
+  const greeting = now.getHours() < 12 ? 'Good morning' : now.getHours() < 18 ? 'Good afternoon' : 'Good evening'
+  const clockTime = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).split(' ')
+
   return <div className="app">
     <aside className="sidebar">
       <a className="logo" href="#" aria-label="MedBunny home" onClick={() => setPage('Home')}><img src="/assets/logo.png" alt="MedBunny rabbit logo" /></a>
-      <nav>{['Home', 'Schedule', 'History'].map(item => <button key={item} className={`nav-item ${page === item ? 'active' : ''}`} onClick={() => setPage(item)}><Icon name={item.toLowerCase()} /><span>{item}</span></button>)}</nav>
+      <nav>{['Home', 'Schedule', 'History'].map(item => <button key={item} className={`nav-item ${page === item ? 'active' : ''}`} onClick={() => { setPage(item); if (item !== 'Home') setPreviousPage(item) }}><Icon name={item.toLowerCase()} /><span>{item}</span></button>)}</nav>
       <div className="sidebar-bottom"><span className="little-heart"><Icon name="heart" size={21} /></span><span>A little care,<br />every day.</span></div>
     </aside>
     <main>
-      <header><button className="mode" onClick={() => setMode(mode === 'Parent mode' ? 'Child mode' : 'Parent mode')}>{mode}<Icon name="down" size={16} /></button><button className="avatar" aria-label="Open profile" aria-current={page === 'Profile' ? 'page' : undefined} onClick={() => { if (page !== 'Profile') { setPreviousPage(page); setPage('Profile') } }}>A</button></header>
+      <header><button className="mode" onClick={() => setMode(mode === 'Parent mode' ? 'Child mode' : 'Parent mode')}>{mode}<Icon name="down" size={16} /></button><button className="avatar" aria-label="Open profile" aria-current={page === 'Profile' ? 'page' : undefined} onClick={() => { if (page !== 'Profile') { setPreviousPage(page); setPage('Profile') } }}>{avatarLetter}</button></header>
       <div className="page-content">
-        {page === 'Profile' ? <ProfilePage onBack={() => setPage(previousPage)} onLogout={() => { setPage('Home'); setScreen('landing') }} /> : page === 'Schedule' ? <MedicationSchedule /> : page === 'History' ? <MedicationHistory taken={taken} /> : <>
-        <div className="greeting"><div><div className="eyebrow">A LITTLE CARE GOES A LONG WAY</div><h1>{page === 'Home' ? 'Good morning, Parent!' : page === 'Schedule' ? 'A healthy day, all planned.' : 'Little steps, lovely progress.'}<span className="greeting-sun"><Icon name="sun" size={30} /></span></h1><p>Tuesday, October 27 <span>·</span> Let's make today a healthy one.</p></div><div className="greeting-clock"><span>LOCAL TIME</span><time dateTime="14:00">02.00 <small>PM</small></time></div></div>
-        <section className="top-grid">
-          <div className="week-card"><div className="section-heading"><h2>Your week at a glance</h2><span className="week-month"><span className="week-month-text">October</span></span></div><div className="week" aria-label="Week of October 25–31, 2026">{['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, i) => <div key={day} className={`week-day${i === 2 ? ' selected' : ''}`} aria-current={i === 2 ? 'date' : undefined}><span>{day}</span><strong>{i + 25}</strong><i className={i < 3 ? 'has-dose' : ''} /></div>)}</div></div>
-          <div className={`dose-card ${taken ? 'dose-done' : ''}`}><div className="dose-content"><span className="dose-label">{taken ? 'ALL DONE FOR TODAY' : 'NEXT DOSE'}</span><h2>{taken ? 'Wonderful!' : '2:00'}{!taken && <small>PM</small>}</h2><strong>{taken ? 'A little healthier, together.' : 'Ibuprofen'}</strong><p>{taken ? 'Every little dose is a big step.' : '400 mg · After a meal'}</p><button className="take-button" disabled={taken} onClick={openProof}><Icon name={taken ? 'check' : 'pill'} size={18} />{taken ? 'Dose completed' : 'Mark as taken'}{!taken && <Icon name="chevron" size={15} />}</button></div><img className="mascot" src={taken ? "/assets/bunny.png" : "/assets/bunny-sleeping.png"} alt={taken ? "MedBunny rabbit holding a happy yellow star" : "MedBunny rabbit sleeping while hugging a star"} /><span className="spark spark-one">✦</span><span className="spark spark-two">✧</span></div>
-        </section>
-        <section className="lower-grid"><div className="schedule-card"><div className="section-heading"><div><h2>{page === 'History' ? 'Your medication history' : 'Today’s schedule'}</h2><p className="schedule-subtitle">A small routine. A big difference.</p></div><button className="text-button" onClick={() => setPage(page === 'Schedule' ? 'Home' : 'Schedule')}>{page === 'Schedule' ? 'Back home' : 'View schedule'}<Icon name="chevron" size={15} /></button></div><div className="time-heading"><Icon name="sun" size={18} /><strong>Morning</strong><span>8:00 AM</span><div /></div>{medicines.slice(0, 2).map(m => <div className="medicine" key={m.name}><span className={`medicine-icon ${m.color}`}><img className="medicine-illustration" src="/assets/Kawaii_Heart_Medicine_Bottle.png" alt="" /></span><div className="medicine-info"><strong>{m.name} <span>{m.dose}</span></strong><p>{m.instruction}</p></div><span className="completed"><Icon name="check" size={14} />Taken <small>8:04 AM</small></span></div>)}<div className="time-heading afternoon"><Icon name="sun" size={18} /><strong>Afternoon</strong><span>2:00 PM</span><div /></div><div className="medicine"><span className="medicine-icon blue"><img className="medicine-illustration" src="/assets/Kawaii_Heart_Medicine_Bottle.png" alt="" /></span><div className="medicine-info"><strong>Ibuprofen <span>400 mg</span></strong><p>After a meal</p></div>{taken ? <span className="completed"><Icon name="check" size={14} />Taken</span> : <button className="upcoming take-now" onClick={openProof}>Take now<Icon name="chevron" size={14} /></button>}</div><div className="schedule-footer"><Icon name="heart" size={15} /> You're doing a wonderful job caring for your little one.</div></div>
-        <div className="right-column"><div className="progress-card"><div className="section-heading"><h2>Little wins, big smiles</h2></div><div className="progress-content"><div className={`progress-ring ${taken ? 'full' : ''}`}><div><strong>{taken ? '3' : '2'}<span>/3</span></strong><small>doses taken</small></div></div><div><h3>{taken ? 'You did it!' : 'One more little step.'}</h3><p>{taken ? 'All today’s doses are complete.' : 'A healthy habit starts with a little consistency.'}</p></div></div><div className="progress-track"><i className="done" /><i className="done" /><i className={taken ? 'done' : ''} /></div><div className="progress-caption"><span>Today's progress</span><strong>{taken ? '100' : '67'}%</strong></div></div><div className="kind-card"><span className="plant-art"><i /><i /><i /><b /></span><div><span>A GENTLE REMINDER</span><h3>Small routines,<br />bright futures.</h3><p>A little love and care, every single day.</p></div><Icon name="heart" size={20} /></div></div></section>
+        {page === 'Profile' ? <ProfilePage user={session.user} child={child} onBack={() => setPage(previousPage)} onLogout={() => void handleLogout()} /> : page === 'Schedule' ? <MedicationSchedule childId={child.id} onChanged={() => setHomeRefresh(value => value + 1)} /> : page === 'History' ? <MedicationHistory childId={child.id} /> : <>
+          <div className="greeting"><div><div className="eyebrow">A LITTLE CARE GOES A LONG WAY</div><h1>{greeting}, {session.user.name.split(' ')[0]}!<span className="greeting-sun"><Icon name="sun" size={30} /></span></h1><p>{now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} <span>·</span> Let's make today a healthy one.</p></div><div className="greeting-clock"><span>LOCAL TIME</span><time dateTime={now.toTimeString().slice(0, 5)}>{clockTime[0]} <small>{clockTime[1]}</small></time></div></div>
+          <section className="top-grid">
+            <div className="week-card"><div className="section-heading"><h2>Your week at a glance</h2><span className="week-month"><span className="week-month-text">{now.toLocaleDateString('en-US', { month: 'long' })}</span></span></div><div className="week" aria-label={`Week of ${weekStart.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}–${weekEnd.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`}>{weekDays.map(day => <div key={day.key} className={`week-day${day.isToday ? ' selected' : ''}`} aria-current={day.isToday ? 'date' : undefined}><span>{day.label}</span><strong>{day.date}</strong><i className={day.hasDose ? 'has-dose' : ''} /></div>)}</div></div>
+            <div className={`dose-card ${allDone ? 'dose-done' : ''}`}><div className="dose-content"><span className="dose-label">{allDone ? 'ALL DONE FOR TODAY' : nextDose ? 'NEXT DOSE' : 'TODAY'}</span><h2>{allDone ? 'Wonderful!' : nextDose && nextDoseTime.length ? <>{nextDoseTime[0]}<small>{nextDoseTime[1]}</small></> : 'All clear'}</h2><strong>{allDone ? 'A little healthier, together.' : nextDose ? nextDose.medicationName : 'No doses scheduled'}</strong><p>{allDone ? 'Every little dose is a big step.' : nextDose ? nextDose.dose : 'Add a medication to start your routine.'}</p><button className="take-button" disabled={allDone || !nextDose || homeLoading} onClick={() => nextDose && openProof(nextDose)}><Icon name={allDone ? 'check' : 'pill'} size={18} />{allDone ? 'Dose completed' : nextDose ? 'Mark as taken' : 'Nothing due'}{!allDone && nextDose && <Icon name="chevron" size={15} />}</button></div><img className="mascot" src={allDone ? "/assets/bunny.png" : "/assets/bunny-sleeping.png"} alt={allDone ? "MedBunny rabbit holding a happy yellow star" : "MedBunny rabbit sleeping while hugging a star"} /><span className="spark spark-one">✦</span><span className="spark spark-two">✧</span></div>
+          </section>
+          {homeError && <p className="home-error" role="alert">{homeError}</p>}
+          <section className="lower-grid"><div className="schedule-card"><div className="section-heading"><div><h2>Today’s schedule</h2><p className="schedule-subtitle">A small routine. A big difference.</p></div><button className="text-button" onClick={() => setPage('Schedule')}>View schedule<Icon name="chevron" size={15} /></button></div>
+            {homeLoading ? <div className="history-empty"><p>Loading today’s schedule…</p></div> : groupedDoses.length ? groupedDoses.map(group => <div key={group.name}><div className="time-heading"><Icon name="sun" size={18} /><strong>{group.name}</strong><span>{timeLabel(group.doses[0]?.scheduledAt ?? '')}</span><div /></div>{group.doses.map((dose, index) => <div className="medicine" key={dose.id}><span className={`medicine-icon ${['coral', 'yellow', 'blue'][index % 3]}`}><img className="medicine-illustration" src="/assets/Kawaii_Heart_Medicine_Bottle.png" alt="" /></span><div className="medicine-info"><strong>{dose.medicationName} <span>{dose.dose}</span></strong><p>{timeLabel(dose.scheduledAt)}{dose.status === 'missed' ? ' · Missed' : dose.status === 'awaiting' ? ' · Due now' : dose.status === 'upcoming' ? ' · Upcoming' : ''}</p></div>{dose.confirmedAt ? <span className="completed"><Icon name="check" size={14} />Taken <small>{timeLabel(dose.confirmedAt)}</small></span> : <button className="upcoming take-now" onClick={() => openProof(dose)}>Take now<Icon name="chevron" size={14} /></button>}</div>)}</div>) : <div className="history-empty"><Icon name="pill" size={33} /><h3>No doses today</h3><p>Your schedule is clear. Add a medication if you need one.</p></div>}
+            <div className="schedule-footer"><Icon name="heart" size={15} /> You're doing a wonderful job caring for your little one.</div></div>
+          <div className="right-column"><div className="progress-card"><div className="section-heading"><h2>Little wins, big smiles</h2></div><div className="progress-content"><div className={`progress-ring ${progressPercent === 100 ? 'full' : ''}`}><div><strong>{takenCount}<span>/{todayDoses.length}</span></strong><small>doses taken</small></div></div><div><h3>{progressPercent === 100 ? 'You did it!' : todayDoses.length ? 'One more little step.' : 'A fresh start.'}</h3><p>{progressPercent === 100 ? 'All today’s doses are complete.' : todayDoses.length ? 'A healthy habit starts with a little consistency.' : 'Add a medication and your progress will appear here.'}</p></div></div><div className="progress-track">{[0, 1, 2].map(index => <i key={index} className={index < Math.round((progressPercent / 100) * 3) ? 'done' : ''} />)}</div><div className="progress-caption"><span>Today's progress</span><strong>{progressPercent}%</strong></div></div><div className="kind-card"><span className="plant-art"><i /><i /><i /><b /></span><div><span>A GENTLE REMINDER</span><h3>Small routines,<br />bright futures.</h3><p>A little love and care, every single day.</p></div><Icon name="heart" size={20} /></div></div></section>
         </>}
         <footer><img className="footer-wordmark" src="/assets/medbunny-wordmark.png" alt="MedBunny" /><span>Made for little ones. Here for you.</span><span className="footer-heart"><Icon name="heart" size={14} /> Growing healthier, together.</span></footer>
       </div>
     </main>
-    {proofOpen && <dialog className="proof-dialog" ref={node => { if (node && !node.open) node.showModal() }} onCancel={() => setProofOpen(false)} aria-labelledby="proof-title" aria-describedby="proof-description">
-      <form onSubmit={event => { event.preventDefault(); if (proof) { setTaken(true); setProofOpen(false) } }}>
+    {proofOpen && activeDose && <dialog className="proof-dialog" ref={node => { if (node && !node.open) node.showModal() }} onCancel={() => setProofOpen(false)} aria-labelledby="proof-title" aria-describedby="proof-description">
+      <form onSubmit={event => void handleConfirm(event)}>
         <span className="proof-symbol"><Icon name="pill" size={26} /></span>
         <h2 id="proof-title">Have you taken your medicine?</h2>
-        <p id="proof-description">Upload proof to confirm your Ibuprofen dose.<br />Ask a parent or caregiver to help.</p>
-        <label className="proof-label" htmlFor="medicine-proof">Upload proof</label>
+        <p id="proof-description">Confirm your {activeDose.medicationName} dose. A photo is optional and stays on this device.<br />Ask a parent or caregiver to help.</p>
+        <label className="proof-label" htmlFor="medicine-proof">Add a photo (optional)</label>
         <label className={`proof-upload ${proof ? 'has-image' : ''}`} htmlFor="medicine-proof">
           {proof ? <><img src={proof} alt="Selected medication proof" /><span>{proofName} · Click to replace</span></> : <><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 15v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5" /></svg><strong>Choose an image</strong><span>JPG, PNG or WebP · Up to 5 MB</span></>}
           <input id="medicine-proof" type="file" accept="image/jpeg,image/png,image/webp" onChange={event => {
@@ -319,7 +634,8 @@ export default function App() {
         </label>
         {proofError && <p className="proof-error" role="alert">{proofError}</p>}
         <p className="proof-local-note">Preview only — your image is not sent or saved.</p>
-        <div className="proof-actions"><button className="proof-done" type="submit" disabled={!proof}><Icon name="check" size={18} />Done</button><button className="proof-cancel" type="button" onClick={() => setProofOpen(false)}>Cancel</button></div>
+        {confirmError && <p className="proof-error" role="alert">{confirmError}</p>}
+        <div className="proof-actions"><button className="proof-done" type="submit" disabled={confirming}>{confirming ? 'Saving…' : <><Icon name="check" size={18} />Done</>}</button><button className="proof-cancel" type="button" disabled={confirming} onClick={() => setProofOpen(false)}>Cancel</button></div>
       </form>
     </dialog>}
   </div>

@@ -6,6 +6,9 @@ dist/
 dist-ssr/
 *.local
 
+# Generated Prisma client
+server/src/generated/
+
 # Logs
 logs/
 *.log

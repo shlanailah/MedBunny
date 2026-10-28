@@ -1,0 +1,132 @@
+// MedBunny — Tahap 1
+// Skema mengikuti docs/backend-guide.md §1.2.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Frequency {
+  EVERY_DAY
+  SOME_DAYS
+  AS_NEEDED
+}
+
+enum MealTiming {
+  BEFORE_MEAL
+  AFTER_MEAL
+  ANYTIME
+}
+
+enum Weekday {
+  MON
+  TUE
+  WED
+  THU
+  FRI
+  SAT
+  SUN
+}
+
+enum StarReason {
+  DOSE_CONFIRMED
+}
+
+model User {
+  id            String    @id @default(uuid()) @db.Uuid
+  name          String    @db.VarChar(100)
+  email         String    @unique @db.VarChar(254)
+  passwordHash  String
+  timezone      String    @default("Asia/Jakarta") @db.VarChar(64)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  children      Child[]
+  confirmations DoseLog[]
+
+  @@map("users")
+}
+
+model Child {
+  id               String            @id @default(uuid()) @db.Uuid
+  userId           String            @db.Uuid
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nickname         String?           @db.VarChar(40)
+  createdAt        DateTime          @default(now()) @db.Timestamptz(3)
+  medications      Medication[]
+  starTransactions StarTransaction[]
+
+  @@index([userId])
+  @@map("children")
+}
+
+model Medication {
+  id        String           @id @default(uuid()) @db.Uuid
+  childId   String           @db.Uuid
+  child     Child            @relation(fields: [childId], references: [id], onDelete: Cascade)
+  name      String           @db.VarChar(80)
+  dose      String           @db.VarChar(40)
+  startDate DateTime         @db.Date
+  frequency Frequency
+  meal      MealTiming       @default(ANYTIME)
+  note      String?          @db.VarChar(1000)
+  createdAt DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime         @updatedAt @db.Timestamptz(3)
+  times     MedicationTime[]
+  days      MedicationDay[]
+  doseLogs  DoseLog[]
+
+  @@index([childId])
+  @@map("medications")
+}
+
+model MedicationTime {
+  medicationId String     @db.Uuid
+  medication   Medication @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+  time         String     @db.VarChar(5) // "HH:mm", sama dengan nilai <input type="time">
+
+  @@id([medicationId, time]) // jam yang sama tidak bisa dimasukkan dua kali
+  @@map("medication_times")
+}
+
+model MedicationDay {
+  medicationId String     @db.Uuid
+  medication   Medication @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+  day          Weekday
+
+  @@id([medicationId, day])
+  @@map("medication_days")
+}
+
+model DoseLog {
+  id              String           @id @default(uuid()) @db.Uuid
+  medicationId    String           @db.Uuid
+  medication      Medication       @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+  medicationName  String           @db.VarChar(80) // snapshot: riwayat tidak berubah saat obat diedit
+  dose            String           @db.VarChar(40) // snapshot
+  scheduledAt     DateTime         @db.Timestamptz(3)
+  confirmedAt     DateTime?        @db.Timestamptz(3)
+  confirmedById   String?          @db.Uuid
+  confirmedBy     User?            @relation(fields: [confirmedById], references: [id], onDelete: SetNull)
+  starTransaction StarTransaction?
+
+  @@unique([medicationId, scheduledAt]) // §5.4: satu jadwal dosis = satu baris
+  @@index([scheduledAt])
+  @@map("dose_logs")
+}
+
+model StarTransaction {
+  id        String     @id @default(uuid()) @db.Uuid
+  childId   String     @db.Uuid
+  child     Child      @relation(fields: [childId], references: [id], onDelete: Cascade)
+  amount    Int        // positif = dapat, negatif = dipakai (tahap 2)
+  reason    StarReason
+  doseLogId String?    @unique @db.Uuid // §5.4: bintang dari dosis yang sama tidak bisa didapat dua kali
+  doseLog   DoseLog?   @relation(fields: [doseLogId], references: [id], onDelete: SetNull)
+  createdAt DateTime   @default(now()) @db.Timestamptz(3)
+
+  @@index([childId])
+  @@map("star_transactions")
+}
