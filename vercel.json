@@ -1,10 +1,14 @@
 {
   "services": {
     "web": {
-      "root": "."
+      "root": ".",
+      "framework": "vite"
     },
     "api": {
-      "root": "server/"
+      "root": "server/",
+      "framework": "hono",
+      "entrypoint": "src/app.ts",
+      "devCommand": "npm run dev"
     }
   },
   "rewrites": [

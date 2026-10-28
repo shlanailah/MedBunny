@@ -9,6 +9,9 @@ dist-ssr/
 # Generated Prisma client
 server/src/generated/
 
+# Vercel local state
+.vercel/
+
 # Logs
 logs/
 *.log
