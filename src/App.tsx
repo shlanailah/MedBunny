@@ -438,6 +438,55 @@ function AuthPage({ mode, onBack, onSubmit, onSwitch }: { mode: 'login' | 'signu
   </main>
 }
 
+function KidsDashboard({ name, balance }: { name: string; balance: number }) {
+  const games = [
+    { title: 'Bunny’s Garden', description: 'Grow a happy little garden', image: '/assets/schedule-bunny.png', tone: 'garden' },
+    { title: 'Bunny Dress-Up', description: 'Pick a cute outfit for Bunny', image: '/assets/kids-dress-up.png', tone: 'dress-up' },
+    { title: 'Bunny’s Match-Up', description: 'Find all the matching pairs', image: '/assets/kids-match-up.png', tone: 'match-up' },
+    { title: 'Bunny’s Color Hunt', description: 'Spot colors in the garden', image: '/assets/kids-color-hunt.png', tone: 'color-hunt' },
+  ]
+
+  return <section className="kids-dashboard" aria-labelledby="kids-title">
+    <div className="kids-top-grid">
+      <div className="kids-welcome-card">
+        <div>
+          <span className="kids-kicker">LET’S PLAY TOGETHER</span>
+          <h1 id="kids-title">Hi, {name}!</h1>
+          <p>What do you want to play?</p>
+        </div>
+        <img src="/assets/bunny-peeking.png" alt="MedBunny popping in to say hello" />
+        <span className="kids-spark kids-spark-one" aria-hidden="true">✦</span>
+        <span className="kids-spark kids-spark-two" aria-hidden="true">✦</span>
+      </div>
+
+      <div className="kids-stars-card" aria-label={`${balance} stars collected`}>
+        <img src="/assets/happy-star.png" alt="" />
+        <div><strong>{balance}</strong><span>stars collected</span></div>
+      </div>
+    </div>
+
+    <div className="kids-games-heading">
+      <div>
+        <span className="kids-kicker">PICK AN ADVENTURE</span>
+        <h2>Choose your favorite game</h2>
+      </div>
+      <p>Play, explore, and have fun with Bunny.</p>
+    </div>
+
+    <div className="kids-games-grid">
+      {games.map(game => <article className={`kids-game-card ${game.tone}`} key={game.title}>
+        <span className="kids-game-decor" aria-hidden="true">✦</span>
+        <img src={game.image} alt="" />
+        <div>
+          <h3>{game.title}</h3>
+          <p>{game.description}</p>
+          <span className="kids-play-label">Play soon <Icon name="chevron" size={15} /></span>
+        </div>
+      </article>)}
+    </div>
+  </section>
+}
+
 export default function App() {
   const [screen, setScreen] = useState<PublicScreen>('landing')
   const [session, setSession] = useState<Session | null>(null)
@@ -639,17 +688,21 @@ export default function App() {
   function handlePinSubmit(event: FormEvent) {
     event.preventDefault()
     if (pin.length !== 4) return
-    setMode('Child mode')
+    setMode('Kids mode')
+    setPage('Home')
     closePinDialog()
   }
 
-  return <div className="app">
+  const isKidsMode = mode === 'Kids mode'
+  const childName = child.nickname?.trim() || session.user.name.split(' ')[0] || 'kiddo'
+
+  return <div className={`app ${isKidsMode ? 'kids-active' : ''}`}>
     <aside className="sidebar">
       <a className="logo" href="#" aria-label="MedBunny home" onClick={() => setPage('Home')}><img src="/assets/logo.png" alt="MedBunny rabbit logo" /></a>
-      <nav>{['Home', 'Schedule', 'History'].map(item => <button key={item} className={`nav-item ${page === item ? 'active' : ''}`} onClick={() => { setPage(item); if (item !== 'Home') setPreviousPage(item) }}><Icon name={item.toLowerCase()} /><span>{item}</span></button>)}</nav>
-      <div className="sidebar-bottom"><span className="little-heart"><Icon name="heart" size={21} /></span><span>A little care,<br />every day.</span></div>
+      {!isKidsMode && <nav>{['Home', 'Schedule', 'History'].map(item => <button key={item} className={`nav-item ${page === item ? 'active' : ''}`} onClick={() => { setPage(item); if (item !== 'Home') setPreviousPage(item) }}><Icon name={item.toLowerCase()} /><span>{item}</span></button>)}</nav>}
+      {!isKidsMode && <div className="sidebar-bottom"><span className="little-heart"><Icon name="heart" size={21} /></span><span>A little care,<br />every day.</span></div>}
     </aside>
-    <main>
+    <main className={isKidsMode ? 'kids-main' : undefined}>
       <header><div className="mode-menu-wrap">
           <button
             className="mode"
@@ -687,9 +740,9 @@ export default function App() {
             </div>
           )}
         </div>
-        <button className="avatar" aria-label="Open profile" aria-current={page === 'Profile' ? 'page' : undefined} onClick={() => { if (page !== 'Profile') { setPreviousPage(page); setPage('Profile') } }}>{avatarLetter}</button></header>
-      <div className="page-content">
-        {page === 'Profile' ? <ProfilePage user={session.user} child={child} onBack={() => setPage(previousPage)} onLogout={() => void handleLogout()} /> : page === 'Schedule' ? <MedicationSchedule childId={child.id} onChanged={() => setHomeRefresh(value => value + 1)} /> : page === 'History' ? <MedicationHistory childId={child.id} /> : <>
+        <button className="avatar" aria-label={isKidsMode ? `${childName}'s profile` : 'Open profile'} aria-current={page === 'Profile' ? 'page' : undefined} onClick={() => { if (!isKidsMode && page !== 'Profile') { setPreviousPage(page); setPage('Profile') } }}>{isKidsMode ? childName.charAt(0).toUpperCase() : avatarLetter}</button></header>
+      <div className={`page-content ${isKidsMode ? 'kids-page-content' : ''}`}>
+        {isKidsMode ? <KidsDashboard name={childName} balance={homeData.balance} /> : page === 'Profile' ? <ProfilePage user={session.user} child={child} onBack={() => setPage(previousPage)} onLogout={() => void handleLogout()} /> : page === 'Schedule' ? <MedicationSchedule childId={child.id} onChanged={() => setHomeRefresh(value => value + 1)} /> : page === 'History' ? <MedicationHistory childId={child.id} /> : <>
           <div className="greeting"><div><div className="eyebrow">A LITTLE CARE GOES A LONG WAY</div><h1>{greeting}, {session.user.name.split(' ')[0]}!<span className="greeting-sun"><Icon name="sun" size={30} /></span></h1><p>{now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} <span>·</span> Let's make today a healthy one.</p></div><div className="greeting-clock"><span>LOCAL TIME</span><time dateTime={now.toTimeString().slice(0, 5)}>{clockTime[0]} <small>{clockTime[1]}</small></time></div></div>
           <section className="top-grid">
             <div className="week-card"><div className="section-heading"><h2>Your week at a glance</h2><span className="week-month"><span className="week-month-text">{now.toLocaleDateString('en-US', { month: 'long' })}</span></span></div><div className="week" aria-label={`Week of ${weekStart.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}–${weekEnd.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`}>{weekDays.map(day => <div key={day.key} className={`week-day${day.isToday ? ' selected' : ''}`} aria-current={day.isToday ? 'date' : undefined}><span>{day.label}</span><strong>{day.date}</strong><i className={day.hasDose ? 'has-dose' : ''} /></div>)}</div></div>

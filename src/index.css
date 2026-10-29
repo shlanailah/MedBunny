@@ -548,3 +548,94 @@ main > header{height:64px;align-items:flex-end}
   .pin-close{width:38px;height:38px}
   .pin-field{height:66px}
 }
+
+
+/* Kids mode game dashboard */
+.kids-active{background:var(--cream)}
+.kids-active .mode-dot{background:var(--sunshine)}
+.kids-main{min-height:100dvh;background:
+  radial-gradient(circle at 88% 12%,color-mix(in srgb,var(--sunshine) 15%,transparent) 0 12%,transparent 30%),
+  radial-gradient(circle at 25% 65%,color-mix(in srgb,var(--lavender) 12%,transparent) 0 10%,transparent 30%),
+  #fbfaf5}
+.kids-main>header{height:102px}
+.kids-page-content{max-width:1280px;padding-top:18px;padding-bottom:48px}
+.kids-top-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(300px,.85fr);gap:26px;align-items:stretch}
+.kids-welcome-card{position:relative;min-height:225px;padding:38px 44% 34px 42px;border:1px solid color-mix(in srgb,var(--sage) 70%,white);border-radius:30px;background:linear-gradient(135deg,color-mix(in srgb,var(--sage) 32%,#fffefa),color-mix(in srgb,var(--sage) 58%,#fffefa));overflow:hidden;box-shadow:0 12px 30px #344d430b}
+.kids-welcome-card>div{position:relative;z-index:2}
+.kids-kicker{display:inline-flex;padding:6px 10px;border-radius:18px;background:#fffefa;color:#627b67;font-size:9px;font-weight:900;letter-spacing:1.4px}
+.kids-welcome-card h1{display:block;margin:17px 0 7px;font-size:clamp(30px,3vw,43px);line-height:1.05;letter-spacing:-1.5px}
+.kids-welcome-card p{margin:0;color:#5f735f;font-size:16px;font-weight:700}
+.kids-welcome-card>img{position:absolute;right:3%;bottom:-13%;width:42%;height:108%;object-fit:contain;z-index:1;filter:drop-shadow(0 10px 8px #344d4318)}
+.kids-spark{position:absolute;z-index:2;color:#fffefa;font-size:25px}
+.kids-spark-one{right:40%;top:24px}.kids-spark-two{right:7%;top:32px;font-size:17px}
+.kids-stars-card{position:relative;display:flex;align-items:center;justify-content:center;gap:18px;min-height:225px;padding:30px;border:1px solid color-mix(in srgb,var(--sunshine) 78%,white);border-radius:30px;background:linear-gradient(145deg,var(--sunshine-soft),color-mix(in srgb,var(--sunshine) 46%,#fffefa));box-shadow:0 12px 30px #8b702f12;overflow:hidden}
+.kids-stars-card:before,.kids-stars-card:after{content:'✦';position:absolute;color:color-mix(in srgb,var(--sunshine) 70%,white);font-size:34px}
+.kids-stars-card:before{top:18px;right:24px}.kids-stars-card:after{bottom:16px;left:28px;font-size:21px}
+.kids-stars-card>img{position:relative;width:90px;height:90px;object-fit:contain;z-index:1;filter:drop-shadow(0 7px 5px #9d762822)}
+.kids-stars-card>div{position:relative;display:flex;flex-direction:column;z-index:1}
+.kids-stars-card strong{font-size:45px;line-height:1;color:var(--forest)}
+.kids-stars-card span{margin-top:7px;color:#78652e;font-size:14px;font-weight:900}
+.kids-games-heading{display:flex;align-items:end;justify-content:space-between;gap:28px;margin-bottom:-24px}
+.kids-games-heading .kids-kicker{background:var(--lavender-soft);color:#665a7e}
+.kids-games-heading h2{margin-top:11px;font-size:28px;letter-spacing:-.8px}
+.kids-games-heading>p{max-width:280px;margin:0;color:#778477;font-size:12px;line-height:1.7;text-align:right}
+.kids-games-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}
+.kids-game-card{position:relative;min-height:255px;padding:28px 28px 24px;display:grid;grid-template-columns:minmax(170px,.9fr) minmax(180px,1.1fr);align-items:center;gap:18px;border:1px solid transparent;border-radius:29px;overflow:hidden;box-shadow:0 12px 32px #344d430b;transition:transform .2s,box-shadow .2s}
+.kids-game-card:hover{transform:translateY(-3px);box-shadow:0 18px 38px #344d4314}
+.kids-game-card.garden{background:color-mix(in srgb,var(--sage) 36%,#fffefa);border-color:var(--sage)}
+.kids-game-card.dress-up{background:var(--peach-soft);border-color:var(--peach)}
+.kids-game-card.match-up{background:var(--sunshine-soft);border-color:var(--sunshine)}
+.kids-game-card.color-hunt{background:var(--lavender-soft);border-color:var(--lavender)}
+.kids-game-card>img{position:relative;z-index:1;width:100%;height:190px;object-fit:contain;filter:drop-shadow(0 8px 6px #344d4314)}
+.kids-game-card.dress-up>img{height:210px}
+.kids-game-card.color-hunt>img{height:175px}
+.kids-game-card>div{position:relative;z-index:2}
+.kids-game-card h3{margin:0 0 8px;font-size:24px;line-height:1.12;letter-spacing:-.6px}
+.kids-game-card p{margin:0;color:#69796c;font-size:12px;line-height:1.6}
+.kids-play-label{display:inline-flex;align-items:center;gap:5px;margin-top:20px;padding:8px 12px;border-radius:18px;background:#fffefa;color:var(--forest);font-size:10px;font-weight:900;box-shadow:0 2px 0 #344d4314}
+.kids-game-decor{position:absolute;right:20px;top:16px;color:#fffefa;font-size:24px}
+
+@media(max-width:1000px){
+  .kids-top-grid{grid-template-columns:1.25fr .75fr}
+  .kids-welcome-card{padding-left:30px}
+  .kids-stars-card{flex-direction:column;gap:5px;text-align:center}
+  .kids-stars-card>img{width:70px;height:70px}
+  .kids-stars-card>div{align-items:center}
+  .kids-game-card{grid-template-columns:1fr;padding:22px;text-align:center}
+  .kids-game-card>img{height:150px}
+  .kids-game-card.dress-up>img{height:175px}
+}
+@media(max-width:780px){
+  .kids-dashboard{gap:38px}
+  .kids-top-grid{grid-template-columns:1fr}
+  .kids-stars-card{min-height:auto;flex-direction:row;padding:22px}
+  .kids-stars-card>div{align-items:flex-start;text-align:left}
+  .kids-stars-card strong{font-size:36px}
+  .kids-games-heading{align-items:flex-start}
+  .kids-games-heading>p{display:none}
+  .kids-game-card h3{font-size:20px}
+}
+@media(max-width:600px){
+  .kids-page-content{padding-inline:16px}
+  .kids-top-grid{gap:16px}
+  .kids-welcome-card{min-height:210px;padding:28px 43% 26px 24px;border-radius:24px}
+  .kids-welcome-card h1{font-size:29px}
+  .kids-welcome-card p{font-size:13px;line-height:1.5}
+  .kids-welcome-card>img{right:-5%;width:52%}
+  .kids-games-heading h2{font-size:23px}
+  .kids-games-grid{grid-template-columns:1fr;gap:16px}
+  .kids-game-card{min-height:190px;grid-template-columns:140px 1fr;text-align:left;border-radius:24px;padding:18px}
+  .kids-game-card>img,.kids-game-card.dress-up>img,.kids-game-card.color-hunt>img{height:145px}
+  .kids-play-label{margin-top:13px}
+}
+@media(max-width:420px){
+  .kids-welcome-card{padding-right:38%}
+  .kids-game-card{grid-template-columns:112px 1fr;gap:10px}
+  .kids-game-card h3{font-size:18px}
+  .kids-game-card p{font-size:10px}
+  .kids-game-card>img,.kids-game-card.dress-up>img,.kids-game-card.color-hunt>img{height:125px}
+}
+@media(max-width:480px){
+  .kids-active .sidebar{display:none}
+  .kids-active main{padding-bottom:0}
+}
