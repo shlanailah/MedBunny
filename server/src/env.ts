@@ -11,11 +11,10 @@ const EnvSchema = z.object({
 const parsed = EnvSchema.safeParse(process.env)
 
 if (!parsed.success) {
-  console.error('Konfigurasi environment tidak valid:')
-  for (const issue of parsed.error.issues) {
-    console.error(`  - ${issue.path.join('.')}: ${issue.message}`)
-  }
-  process.exit(1)
+  const details = parsed.error.issues
+    .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
+    .join('; ')
+  throw new Error(`Konfigurasi environment tidak valid: ${details}`)
 }
 
 export const env = parsed.data
