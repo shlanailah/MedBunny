@@ -1,3 +1,5 @@
+// Detektor entrypoint Vercel Hono memerlukan import langsung dari paket "hono".
+import type { Hono } from 'hono'
 import { swaggerUI } from '@hono/swagger-ui'
 import { createRoute, z } from '@hono/zod-openapi'
 import { HTTPException } from 'hono/http-exception'
