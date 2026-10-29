@@ -508,3 +508,43 @@ main > header{height:64px;align-items:flex-end}
 .home-error{margin:-6px 0 18px;padding:12px 16px;border-radius:16px;background:var(--peach-soft);color:#a43e31;font-size:12px;font-weight:700}
 .auth-error{display:block;margin-top:4px;text-align:center}
 .auth-submit:disabled,.review-save:disabled,.take-button:disabled,.proof-cancel:disabled{opacity:.55;cursor:not-allowed}
+
+/* Header mode menu */
+.mode-menu-wrap{position:relative}
+.mode-menu-wrap .mode{position:relative;z-index:2}
+.mode-chevron{display:inline-flex;transition:transform .2s}
+.mode-chevron.open{transform:rotate(180deg)}
+.mode-dropdown{position:absolute;top:-10px;left:-10px;z-index:1;min-width:calc(100% + 20px);padding:66px 14px 14px;background:#fffefa;border:1px solid #e6e9df;border-radius:26px;box-shadow:0 20px 50px #344d431c}
+.mode-dropdown button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:10px 14px;border-radius:12px;background:transparent;color:#b96b56;font:inherit;font-size:13px;font-weight:800;text-align:left;text-decoration:underline;text-decoration-thickness:1.5px;text-underline-offset:4px;white-space:nowrap}
+.mode-dropdown button:hover{background:#fbefe9}
+.mode-dropdown button svg{color:inherit}
+
+/* Parent PIN dialog shown before switching to kids mode */
+.pin-dialog{width:min(540px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow-y:auto;margin:auto;padding:0;border:0;border-radius:30px;background:#fffefa;color:var(--forest);box-shadow:0 30px 90px #243c4333}
+.pin-dialog::backdrop{background:#eef4ecb8;backdrop-filter:blur(10px)}
+.pin-form{padding:36px 40px 30px}
+.pin-top{display:flex;align-items:flex-start;justify-content:space-between}
+.pin-symbol{width:64px;height:64px;display:grid;place-items:center;border-radius:20px;background:var(--sunshine-soft);color:#5f6b3f}
+.pin-close{width:42px;height:42px;display:grid;place-items:center;border-radius:50%;background:#e5efe5;color:#4c6450}
+.pin-close:hover{background:#d9e7d9}
+.pin-dialog h2{font-size:31px;line-height:1.1;letter-spacing:-1px;margin:26px 0 10px}
+.pin-dialog #pin-description{font-size:15px;line-height:1.6;color:#7c887d;margin:0}
+.pin-label{display:block;margin:28px 0 9px;font-size:14px;font-weight:900}
+.pin-field{position:relative;height:74px;display:grid;place-items:center;border:1px solid #dfe7da;border-radius:16px;background:#fbfcf7}
+.pin-field:focus-within{outline:3px solid #d4e3d3;border-color:#91ad98}
+.pin-dots{display:flex;align-items:center;gap:24px;pointer-events:none}
+.pin-dots i{width:9px;height:9px;border-radius:50%;background:#b7c2b7;transition:background .15s,transform .15s}
+.pin-dots i.filled{background:#5b7560;transform:scale(1.1)}
+.pin-input{position:absolute;inset:0;width:100%;height:100%;opacity:0;border:0;padding:0;cursor:text;font-size:16px}
+.pin-input:focus{outline:0}
+.pin-submit{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;height:62px;margin-top:24px;border-radius:32px;background:#9db8a3;color:#fffefa;font-size:16px;font-weight:900}
+.pin-submit:hover{background:#8fae96}
+.pin-submit:disabled{opacity:.55;cursor:not-allowed}
+.pin-hint{margin-top:12px!important;text-align:center;font-size:12px!important;color:#9aa59b!important}
+@media(max-width:600px){
+  .pin-form{padding:28px 24px 24px}
+  .pin-dialog h2{font-size:26px}
+  .pin-symbol{width:54px;height:54px;border-radius:17px}
+  .pin-close{width:38px;height:38px}
+  .pin-field{height:66px}
+}

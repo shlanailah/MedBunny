@@ -32,6 +32,7 @@ function Icon({ name, size = 22 }: { name: string; size?: number }) {
     timer: <><circle cx="12" cy="14" r="7" /><path d="M10 3h4m-2 7v4" /></>,
     trash: <><path d="M4 7h16M10 11v6m4-6v6M6 7l1 13h10l1-13M9 7V4h6v3" /></>,
     logout: <><path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 17l5-5-5-5M15 12H3" /></>,
+    close: <path d="M6 6l12 12M18 6 6 18" />,
   }
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name] || paths.sun}</svg>
 }
@@ -444,6 +445,9 @@ export default function App() {
   const [page, setPage] = useState('Home')
   const [previousPage, setPreviousPage] = useState('Home')
   const [mode, setMode] = useState('Parent mode')
+  const [modeMenuOpen, setModeMenuOpen] = useState(false)
+  const [pinOpen, setPinOpen] = useState(false)
+  const [pin, setPin] = useState('')
   const [now, setNow] = useState(new Date())
   const [proofOpen, setProofOpen] = useState(false)
   const [proof, setProof] = useState('')
@@ -482,6 +486,23 @@ export default function App() {
     window.addEventListener('medbunny:unauthorized', handleUnauthorized)
     return () => window.removeEventListener('medbunny:unauthorized', handleUnauthorized)
   }, [])
+
+  useEffect(() => {
+    if (!modeMenuOpen) return
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target
+      if (target instanceof Element && !target.closest('.mode-menu-wrap')) setModeMenuOpen(false)
+    }
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setModeMenuOpen(false)
+    }
+    document.addEventListener('mousedown', handleOutsideClick)
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [modeMenuOpen])
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 30000)
@@ -610,6 +631,18 @@ export default function App() {
   const greeting = now.getHours() < 12 ? 'Good morning' : now.getHours() < 18 ? 'Good afternoon' : 'Good evening'
   const clockTime = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).split(' ')
 
+  function closePinDialog() {
+    setPinOpen(false)
+    setPin('')
+  }
+
+  function handlePinSubmit(event: FormEvent) {
+    event.preventDefault()
+    if (pin.length !== 4) return
+    setMode('Child mode')
+    closePinDialog()
+  }
+
   return <div className="app">
     <aside className="sidebar">
       <a className="logo" href="#" aria-label="MedBunny home" onClick={() => setPage('Home')}><img src="/assets/logo.png" alt="MedBunny rabbit logo" /></a>
@@ -617,7 +650,44 @@ export default function App() {
       <div className="sidebar-bottom"><span className="little-heart"><Icon name="heart" size={21} /></span><span>A little care,<br />every day.</span></div>
     </aside>
     <main>
-      <header><button className="mode" onClick={() => setMode(mode === 'Parent mode' ? 'Child mode' : 'Parent mode')}>{mode}<Icon name="down" size={16} /></button><button className="avatar" aria-label="Open profile" aria-current={page === 'Profile' ? 'page' : undefined} onClick={() => { if (page !== 'Profile') { setPreviousPage(page); setPage('Profile') } }}>{avatarLetter}</button></header>
+      <header><div className="mode-menu-wrap">
+          <button
+            className="mode"
+            aria-expanded={modeMenuOpen}
+            aria-haspopup="menu"
+            onClick={() => setModeMenuOpen(open => !open)}
+          >
+            {mode}
+            <span className={`mode-chevron ${modeMenuOpen ? 'open' : ''}`}>
+              <Icon name="down" size={16} />
+            </span>
+          </button>
+
+          {modeMenuOpen && (
+            <div className="mode-dropdown" role="menu">
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setModeMenuOpen(false)
+
+                  if (mode === 'Parent mode') {
+                    setPin('')
+                    setPinOpen(true)
+                  } else {
+                    setMode('Parent mode')
+                  }
+                }}
+              >
+                {mode === 'Parent mode'
+                  ? 'Switch to kids mode'
+                  : 'Switch to parent mode'}
+
+                <Icon name="chevron" size={15} />
+              </button>
+            </div>
+          )}
+        </div>
+        <button className="avatar" aria-label="Open profile" aria-current={page === 'Profile' ? 'page' : undefined} onClick={() => { if (page !== 'Profile') { setPreviousPage(page); setPage('Profile') } }}>{avatarLetter}</button></header>
       <div className="page-content">
         {page === 'Profile' ? <ProfilePage user={session.user} child={child} onBack={() => setPage(previousPage)} onLogout={() => void handleLogout()} /> : page === 'Schedule' ? <MedicationSchedule childId={child.id} onChanged={() => setHomeRefresh(value => value + 1)} /> : page === 'History' ? <MedicationHistory childId={child.id} /> : <>
           <div className="greeting"><div><div className="eyebrow">A LITTLE CARE GOES A LONG WAY</div><h1>{greeting}, {session.user.name.split(' ')[0]}!<span className="greeting-sun"><Icon name="sun" size={30} /></span></h1><p>{now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} <span>·</span> Let's make today a healthy one.</p></div><div className="greeting-clock"><span>LOCAL TIME</span><time dateTime={now.toTimeString().slice(0, 5)}>{clockTime[0]} <small>{clockTime[1]}</small></time></div></div>
@@ -634,6 +704,20 @@ export default function App() {
         <footer><img className="footer-wordmark" src="/assets/medbunny-wordmark.png" alt="MedBunny" /><span>Made for little ones. Here for you.</span><span className="footer-heart"><Icon name="heart" size={14} /> Growing healthier, together.</span></footer>
       </div>
     </main>
+    {pinOpen && <dialog className="pin-dialog" ref={node => { if (node && !node.open) { node.showModal(); node.querySelector('input')?.focus() } }} onCancel={closePinDialog} onClick={event => { if (event.target === event.currentTarget) closePinDialog() }} aria-labelledby="pin-title" aria-describedby="pin-description">
+      <form className="pin-form" onSubmit={handlePinSubmit}>
+        <div className="pin-top"><span className="pin-symbol"><Icon name="shield" size={28} /></span><button className="pin-close" type="button" aria-label="Close PIN dialog" onClick={closePinDialog}><Icon name="close" size={18} /></button></div>
+        <h2 id="pin-title">Enter parent PIN</h2>
+        <p id="pin-description">Enter your 4-digit PIN to switch to kids mode.</p>
+        <label className="pin-label" htmlFor="parent-pin">Parent PIN</label>
+        <div className="pin-field">
+          <span className="pin-dots" aria-hidden="true">{[0, 1, 2, 3].map(index => <i key={index} className={index < pin.length ? 'filled' : ''} />)}</span>
+          <input id="parent-pin" className="pin-input" type="text" inputMode="numeric" autoComplete="off" pattern="[0-9]*" maxLength={4} value={pin} onChange={event => setPin(event.target.value.replace(/\D/g, '').slice(0, 4))} autoFocus aria-label="Parent PIN, 4 digits" />
+        </div>
+        <button className="pin-submit" type="submit" disabled={pin.length !== 4}>Switch to kids mode <Icon name="chevron" size={17} /></button>
+        <p className="pin-hint">Demo only — enter any 4 digits.</p>
+      </form>
+    </dialog>}
     {proofOpen && activeDose && <dialog className="proof-dialog" ref={node => { if (node && !node.open) node.showModal() }} onCancel={() => setProofOpen(false)} aria-labelledby="proof-title" aria-describedby="proof-description">
       <form onSubmit={event => void handleConfirm(event)}>
         <span className="proof-symbol"><Icon name="pill" size={26} /></span>
