@@ -7,7 +7,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "tsx watch src/index.ts",
     "postinstall": "prisma generate",
-    "build": "prisma generate && tsc",
+    "build": "prisma generate && tsc && esbuild src/app.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/app.js --external:pg-native",
     "start": "node dist/index.js",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio"
@@ -31,6 +31,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
+    "esbuild": "^0.28.2",
     "prisma": "^7.10.1",
     "tsx": "^4.23.15",
     "typescript": "~5.9.3"
