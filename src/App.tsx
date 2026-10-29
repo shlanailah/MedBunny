@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import {
   api,
   ApiError,
@@ -303,7 +303,34 @@ function ProfilePage({ user, child, onBack, onLogout }: { user: SessionUser; chi
 
 type PublicScreen = 'landing' | 'login' | 'signup' | 'app'
 
+function useScrollReveal(rootRef: { current: HTMLDivElement | null }) {
+  useLayoutEffect(() => {
+    const root = rootRef.current
+    if (!root) return
+
+    const targets = Array.from(root.querySelectorAll<HTMLElement>('[data-reveal], [data-reveal-group] > *'))
+    const revealAll = () => targets.forEach(target => target.classList.add('is-revealed'))
+
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) {
+      revealAll()
+      return
+    }
+
+    root.classList.add('reveal-ready')
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        entry.target.classList.toggle('is-revealed', entry.isIntersecting)
+      })
+    }, { threshold: 0.15, rootMargin: '0px 0px -8% 0px' })
+
+    targets.forEach(target => observer.observe(target))
+    return () => observer.disconnect()
+  }, [rootRef])
+}
+
 function LandingPage({ onLogin, onSignup }: { onLogin: () => void; onSignup: () => void }) {
+  const landingRef = useRef<HTMLDivElement>(null)
+  useScrollReveal(landingRef)
   const problems = [
     { icon: 'child', title: 'It’s hard to get them to cooperate.', description: 'Your child might refuse or feel scared when it’s time for medicine.', tone: 'peach' },
     { icon: 'schedule', title: 'Did I give the medicine already?', description: 'Busy days make it hard to remember whether the schedule was followed.', tone: 'sky' },
@@ -316,7 +343,7 @@ function LandingPage({ onLogin, onSignup }: { onLogin: () => void; onSignup: () 
     { icon: 'history', title: 'Progress & history', description: 'See your child’s medication history.', tone: 'lavender' },
     { icon: 'shield', title: 'Parent-controlled', description: 'Your account stays in your control.', tone: 'peach' },
   ]
-  return <div className="landing-page">
+  return <div className="landing-page" ref={landingRef}>
     <header className="landing-header">
       <button className="landing-brand" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} aria-label="MedBunny, back to top"><img src="/assets/medbunny-wordmark.png" alt="MedBunny" /></button>
       <nav className="landing-nav" aria-label="Main navigation">
@@ -327,23 +354,23 @@ function LandingPage({ onLogin, onSignup }: { onLogin: () => void; onSignup: () 
 
     <main className="landing-main">
       <section className="landing-hero" id="home">
-        <div className="landing-hero-copy"><span className="landing-kicker">A little care, every day</span><h1>Little Doses,<br /><span>Big Adventures.</span></h1><p>Making medicine routines easier for parents and more playful for little ones.</p><div className="landing-hero-actions"><button className="landing-primary" onClick={onSignup}>Get started <Icon name="chevron" size={16} /></button><a className="landing-secondary" href="#how-it-works">See how it works</a></div><div className="landing-trust"><span><Icon name="shield" size={15} />Parent-guided routines</span><span><Icon name="heart" size={15} />Child-friendly play</span></div></div>
-        <div className="landing-hero-art"><span className="landing-orbit orbit-one" /><span className="landing-orbit orbit-two" /><img src="/assets/bunny.png" alt="MedBunny holding a happy star" /><img className="landing-bottle" src="/assets/Kawaii_Heart_Medicine_Bottle.png" alt="" /><span className="landing-star star-one">✦</span><span className="landing-star star-two">✦</span><div className="hero-chip chip-dose" aria-hidden="true"><span><Icon name="bell" size={17} /></span><div><small>Next dose</small><strong>2:00 PM · Ibuprofen</strong></div></div><div className="hero-chip chip-star" aria-hidden="true"><img src="/assets/happy-star.png" alt="" /><div><small>Today</small><strong>+1 star earned!</strong></div></div></div>
+        <div className="landing-hero-copy" data-reveal-group><span className="landing-kicker">A little care, every day</span><h1>Little Doses,<br /><span>Big Adventures.</span></h1><p>Making medicine routines easier for parents and more playful for little ones.</p><div className="landing-hero-actions"><button className="landing-primary" onClick={onSignup}>Get started <Icon name="chevron" size={16} /></button><a className="landing-secondary" href="#how-it-works">See how it works</a></div><div className="landing-trust"><span><Icon name="shield" size={15} />Parent-guided routines</span><span><Icon name="heart" size={15} />Child-friendly play</span></div></div>
+        <div className="landing-hero-art" data-reveal><span className="landing-orbit orbit-one" /><span className="landing-orbit orbit-two" /><img src="/assets/bunny.png" alt="MedBunny holding a happy star" /><img className="landing-bottle" src="/assets/Kawaii_Heart_Medicine_Bottle.png" alt="" /><span className="landing-star star-one">✦</span><span className="landing-star star-two">✦</span><div className="hero-chip chip-dose" aria-hidden="true"><span><Icon name="bell" size={17} /></span><div><small>Next dose</small><strong>2:00 PM · Ibuprofen</strong></div></div><div className="hero-chip chip-star" aria-hidden="true"><img src="/assets/happy-star.png" alt="" /><div><small>Today</small><strong>+1 star earned!</strong></div></div></div>
       </section>
 
       <section className="landing-section problem-section" id="our-story">
-        <div className="landing-section-heading"><span className="landing-kicker">The problem</span><h2>When Medicine Time Becomes a Challenge</h2><p>We understand. You’re not alone.</p></div>
-        <div className="problem-box"><img src="/assets/bunny-peeking.png" alt="MedBunny listening with care" /><div className="problem-grid">{problems.map(problem => <article className={`landing-info-card tone-${problem.tone}`} key={problem.title}><span><Icon name={problem.icon} size={24} /></span><h3>{problem.title}</h3><p>{problem.description}</p></article>)}</div></div>
+        <div className="landing-section-heading" data-reveal><span className="landing-kicker">The problem</span><h2>When Medicine Time Becomes a Challenge</h2><p>We understand. You’re not alone.</p></div>
+        <div className="problem-box"><img src="/assets/bunny-peeking.png" alt="MedBunny listening with care" data-reveal /><div className="problem-grid" data-reveal-group>{problems.map(problem => <article className={`landing-info-card tone-${problem.tone}`} key={problem.title}><span><Icon name={problem.icon} size={24} /></span><h3>{problem.title}</h3><p>{problem.description}</p></article>)}</div></div>
       </section>
 
       <section className="landing-section solution-section">
-        <div className="landing-section-heading"><span className="landing-kicker">Our solution</span><h2>A Little Helper for Your Child’s Medicine Routine</h2><p>MedBunny helps you stay on track with medication schedules, gentle reminders, and fun activities — all in one place.</p><button className="landing-primary" onClick={onSignup}>Explore MedBunny</button></div>
-        <div className="solution-card"><img src="/assets/schedule-bunny.png" alt="MedBunny helping build a healthy routine" /><div className="solution-benefits"><div className="tone-sage"><Icon name="schedule" /><strong>Medication schedule & reminders</strong></div><div className="tone-sky"><Icon name="check" /><strong>Track doses with ease</strong></div><div className="tone-sunshine"><Icon name="star" /><strong>Bunny mascot & mini-games</strong></div><div className="tone-peach"><Icon name="heart" /><strong>One place for you and your child</strong></div></div></div>
+        <div className="landing-section-heading" data-reveal><span className="landing-kicker">Our solution</span><h2>A Little Helper for Your Child’s Medicine Routine</h2><p>MedBunny helps you stay on track with medication schedules, gentle reminders, and fun activities — all in one place.</p><button className="landing-primary" onClick={onSignup}>Explore MedBunny</button></div>
+        <div className="solution-card"><img src="/assets/schedule-bunny.png" alt="MedBunny helping build a healthy routine" data-reveal /><div className="solution-benefits" data-reveal-group><div className="tone-sage"><Icon name="schedule" /><strong>Medication schedule & reminders</strong></div><div className="tone-sky"><Icon name="check" /><strong>Track doses with ease</strong></div><div className="tone-sunshine"><Icon name="star" /><strong>Bunny mascot & mini-games</strong></div><div className="tone-peach"><Icon name="heart" /><strong>One place for you and your child</strong></div></div></div>
       </section>
 
       <section className="landing-section how-section" id="how-it-works">
-        <div className="landing-section-heading"><span className="landing-kicker">How it works</span><h2>Small Steps, Easier Routines</h2><p>A simple flow to help you and your child build healthy habits together.</p></div>
-        <div className="steps-card">{[ 
+        <div className="landing-section-heading" data-reveal><span className="landing-kicker">How it works</span><h2>Small Steps, Easier Routines</h2><p>A simple flow to help you and your child build healthy habits together.</p></div>
+        <div className="steps-card" data-reveal-group>{[ 
           { icon: 'schedule', title: 'Set the schedule', description: 'Enter medication details based on the label or care instructions.' },
           { icon: 'check', title: 'Track together', description: 'Log doses, check the schedule, and get gentle reminders.' },
           { icon: 'star', title: 'Play & explore', description: 'Let your child enjoy mini-games and fun activities.' },
@@ -351,12 +378,12 @@ function LandingPage({ onLogin, onSignup }: { onLogin: () => void; onSignup: () 
       </section>
 
       <section className="landing-section features-section" id="features">
-        <div className="landing-section-heading"><span className="landing-kicker">Key features</span><h2>More Than a Reminder</h2><p>Thoughtfully designed for both parents and children.</p></div>
-        <div className="features-card">{features.map(feature => <article className={`tone-${feature.tone}`} key={feature.title}><span><Icon name={feature.icon} size={23} /></span><h3>{feature.title}</h3><p>{feature.description}</p></article>)}</div>
+        <div className="landing-section-heading" data-reveal><span className="landing-kicker">Key features</span><h2>More Than a Reminder</h2><p>Thoughtfully designed for both parents and children.</p></div>
+        <div className="features-card" data-reveal-group>{features.map(feature => <article className={`tone-${feature.tone}`} key={feature.title}><span><Icon name={feature.icon} size={23} /></span><h3>{feature.title}</h3><p>{feature.description}</p></article>)}</div>
       </section>
 
-      <section className="promise-section"><div><span className="landing-kicker">Our promise</span><h2>Care Comes First</h2><p>We’re here to support your family with safe, simple, and responsible tools.</p></div><img src="/assets/bunny.png" alt="MedBunny holding a heart" /><ul><li><Icon name="check" size={15} />Medication information is managed by you.</li><li><Icon name="check" size={15} />You enter instructions from the label or healthcare professional.</li><li><Icon name="check" size={15} />MedBunny is not a substitute for a doctor or pharmacist.</li><li><Icon name="check" size={15} />Parent access helps protect your child’s data.</li></ul></section>
-      <section className="landing-cta"><img src="/assets/bunny-peeking.png" alt="" /><span className="cta-star cta-star-one" aria-hidden="true">✦</span><span className="cta-star cta-star-two" aria-hidden="true">✦</span><div className="landing-cta-content"><span className="landing-kicker">Ready to make medicine time feel different?</span><h2>A little support for you. A little adventure for them.</h2><div className="landing-cta-actions"><button className="landing-primary" onClick={onSignup}>Create your free account</button><button className="landing-login" onClick={onLogin}>Log in</button></div></div></section>
+      <section className="promise-section"><div data-reveal><span className="landing-kicker">Our promise</span><h2>Care Comes First</h2><p>We’re here to support your family with safe, simple, and responsible tools.</p></div><img src="/assets/bunny.png" alt="MedBunny holding a heart" data-reveal /><ul data-reveal-group><li><Icon name="check" size={15} />Medication information is managed by you.</li><li><Icon name="check" size={15} />You enter instructions from the label or healthcare professional.</li><li><Icon name="check" size={15} />MedBunny is not a substitute for a doctor or pharmacist.</li><li><Icon name="check" size={15} />Parent access helps protect your child’s data.</li></ul></section>
+      <section className="landing-cta" data-reveal><img src="/assets/bunny-peeking.png" alt="" /><span className="cta-star cta-star-one" aria-hidden="true">✦</span><span className="cta-star cta-star-two" aria-hidden="true">✦</span><div className="landing-cta-content"><span className="landing-kicker">Ready to make medicine time feel different?</span><h2>A little support for you. A little adventure for them.</h2><div className="landing-cta-actions"><button className="landing-primary" onClick={onSignup}>Create your free account</button><button className="landing-login" onClick={onLogin}>Log in</button></div></div></section>
     </main>
     <footer className="landing-footer"><img src="/assets/medbunny-wordmark.png" alt="MedBunny" /><span>Made for little ones. Here for you.</span><button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>Back to top</button></footer>
   </div>

@@ -470,7 +470,23 @@ main > header{height:64px;align-items:flex-end}
 .cta-star-one{right:42px;top:24px}
 .cta-star-two{right:96px;bottom:26px;font-size:22px}
 .landing-footer,.landing-footer button{font-size:12px}
-@media(prefers-reduced-motion:reduce){.hero-chip{animation:none}.landing-primary:hover,.landing-login:hover,.landing-secondary:hover,.features-card article:hover{transform:none}}
+/* Landing motion: sections rise as they enter the viewport and replay on re-entry */
+.reveal-ready [data-reveal]:not(.is-revealed),
+.reveal-ready [data-reveal-group]>:not(.is-revealed){opacity:0}
+.reveal-ready [data-reveal].is-revealed,
+.reveal-ready [data-reveal-group]>.is-revealed{animation:landing-reveal .65s cubic-bezier(.22,.61,.36,1) backwards;animation-delay:var(--reveal-delay,0ms)}
+.reveal-ready [data-reveal-group]>:nth-child(2){--reveal-delay:80ms}
+.reveal-ready [data-reveal-group]>:nth-child(3){--reveal-delay:160ms}
+.reveal-ready [data-reveal-group]>:nth-child(4){--reveal-delay:240ms}
+.reveal-ready [data-reveal-group]>:nth-child(5){--reveal-delay:320ms}
+@keyframes landing-reveal{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){
+  .hero-chip{animation:none}
+  .reveal-ready [data-reveal]:not(.is-revealed),
+  .reveal-ready [data-reveal-group]>:not(.is-revealed){opacity:1}
+  .reveal-ready [data-reveal].is-revealed,.reveal-ready [data-reveal-group]>.is-revealed{animation:none}
+  .landing-primary:hover,.landing-login:hover,.landing-secondary:hover,.features-card article:hover{transform:none}
+}
 @media(max-width:1000px){.hero-chip{display:none}}
 @media(max-width:900px){.landing-section-heading h2,.promise-section h2{font-size:31px}.solution-section{grid-template-columns:1fr}}
 @media(max-width:650px){
