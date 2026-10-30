@@ -182,17 +182,6 @@ npm run preview    # pratinjau hasil build
 
 ---
 
-## 🛠️ Troubleshooting
-
-| Masalah | Solusi |
-| ------- | ------ |
-| `npm install` gagal | Pastikan versi Node.js ≥ 20, lalu hapus `node_modules` dan `package-lock.json`, ulangi install |
-| Port sudah dipakai | Hentikan proses lain di port tersebut, atau jalankan Vite dengan `npm run dev -- --port 3000` |
-| Frontend tidak bisa memanggil API | Pastikan backend (`server/`) sedang berjalan dan proxy/URL API sudah benar |
-| Halaman blank setelah deploy | Cek log build di dashboard Vercel dan pastikan environment variable sudah terisi |
-
----
-
 ## 👤 Pengembang
 
 Dikembangkan oleh [@shlanailah](https://github.com/shlanailah).
