@@ -993,8 +993,8 @@ function KidsDressUp({ onExit, onPlayAgain, canPlayAgain }: {
   )
   const hasAccessory = selected.length > 0
   const bunnyAlt = hasAccessory
-    ? `Bunny memakai ${selected.join(', ')}`
-    : 'MedBunny siap berdandan'
+    ? `Bunny wearing ${selected.join(', ')}`
+    : 'MedBunny ready to dress up'
 
   const bunnyFrame = <div className="dress-up-frame">
     <img src="/assets/bunny tegak.png" alt={bunnyAlt} />
@@ -1041,7 +1041,7 @@ function KidsDressUp({ onExit, onPlayAgain, canPlayAgain }: {
     {finished && <div className="dress-up-finish" role="dialog" aria-labelledby="dress-up-finish-title" aria-modal="true">
       <div className="dress-up-finish-card">
         <span className="kids-kicker">WHAT A LOOK!</span>
-        <h2 id="dress-up-finish-title">Bunny jadi keren!</h2>
+        <h2 id="dress-up-finish-title">Bunny looks awesome!</h2>
         <div className="dress-up-bunny-wrap">{bunnyFrame}</div>
         <div className="kids-complete-actions">
           {canPlayAgain && <button onClick={onPlayAgain}>Play again</button>}
@@ -1728,7 +1728,6 @@ export default function App() {
   const avatarLetter = session.user.name.trim().charAt(0).toUpperCase() || 'P'
   const greeting = now.getHours() < 12 ? 'Good morning' : now.getHours() < 18 ? 'Good afternoon' : 'Good evening'
   const clockTime = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).split(' ')
-  const childName = kidsState?.childName || child.nickname?.trim() || 'friend'
   const pinLockMinutes = lockMinutesLeft(pinLockedUntil, now)
 
   return <div className={`app ${isKidsMode ? 'kids-active' : ''}`}>
