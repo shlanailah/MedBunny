@@ -26,6 +26,28 @@ Website ini punya dua sisi:
 
 > ⚕️ MedBunny **bukan pengganti dokter atau apoteker** dan tidak mendiagnosis penyakit atau menentukan dosis. Semua jadwal diisi orang tua sesuai label obat atau petunjuk tenaga kesehatan. Konfirmasi di aplikasi juga tidak membuktikan obat benar-benar diminum.
 
+### 🌍 MedBunny dan SDG 3: Good Health and Well-being
+
+MedBunny dikembangkan sebagai dukungan terhadap **SDG 3 (Good Health and Well-being)**, yaitu menjamin kehidupan sehat dan meningkatkan kesejahteraan bagi semua orang. Salah satu aspek yang mendukung tujuan ini adalah penggunaan obat sesuai petunjuk tenaga kesehatan secara konsisten.
+
+**Latar belakang masalah**
+
+- **Beban pengasuh.** Pengobatan anak bergantung pada orang tua atau pengasuh, dan kesibukan sehari-hari dapat menyulitkan mereka mengingat serta mencatat pemberian obat. Penelitian Chardon et al. (2022) pada pengasuh anak setelah transplantasi sel punca hematopoietik menemukan bahwa **52%** pengasuh pernah lupa atau khawatir lupa memberikan obat, dan **60%** pengasuh yang merawat anak di rumah menyebut jumlah atau jadwal obat sebagai hambatan. Penelitian ini berfokus pada kondisi medis khusus, tetapi menunjukkan bahwa pengelolaan jadwal obat bisa menjadi tantangan bagi pengasuh.
+- **Pengalaman anak saat minum obat.** Ranmal et al. (2025) menemukan bahwa **64%** dari 225 artikel yang ditinjau melaporkan masalah penerimaan obat, dan **27%** melaporkan dampaknya terhadap kepatuhan pengobatan. Bracken et al. (2020) menunjukkan bahwa penerimaan tablet pada anak usia 4–12 tahun dipengaruhi ukuran sediaan. Karena itu, pendampingan dan pendekatan yang sesuai usia penting untuk pengalaman pengobatan yang lebih positif.
+- **Potensi gamifikasi.** Chai et al. (2022) menemukan peningkatan intensi menjalani pengobatan pada pasien kanker anak setelah penerapan *serious game*, dan tinjauan Rhamelani et al. (2026) menunjukkan gamifikasi berpotensi mendukung kepatuhan pengobatan dan kemampuan *self-management* anak dengan penyakit kronis. Namun, bukti tersebut belum secara khusus menguji efektivitasnya pada anak usia 2–7 tahun.
+- **Batas waktu bermain.** Darmawan (2026) mengutip rekomendasi batas *screen time* maksimal satu jam per hari untuk anak usia 2–5 tahun. Karena itu, durasi sesi bermain MedBunny dapat diatur **5–30 menit** dengan durasi bawaan **15 menit**.
+
+**Bagaimana MedBunny menjawabnya**
+
+| Tantangan | Fitur MedBunny |
+| --------- | -------------- |
+| Pengasuh lupa atau kesulitan mengelola jadwal obat | Jadwal obat sesuai petunjuk tenaga kesehatan di Parent mode, serta notifikasi browser selama tab website terbuka |
+| Pencatatan pemberian obat yang melelahkan | Konfirmasi dosis lewat tombol **Mark as taken** (foto bersifat opsional dan hanya pratinjau di perangkat) dan riwayat yang bisa difilter |
+| Pengalaman minum obat yang kurang menyenangkan bagi anak | Kids mode bersama maskot Bunny dengan 4 mini-games, memakai bintang dari konfirmasi dosis oleh orang tua dan bintang awal akun |
+| Risiko screen time berlebihan | Akses Kids mode dilindungi PIN, dan durasi bermain dikendalikan orang tua |
+
+MedBunny diharapkan membantu orang tua mengelola rutinitas pengobatan sekaligus menghadirkan pengalaman yang lebih interaktif bagi anak. Namun, **efektivitasnya dalam mengurangi dosis terlewat atau meningkatkan kepatuhan pengobatan tetap perlu dievaluasi** melalui pengujian dan uji coba pengguna.
+
 ---
 
 ## 🏗️ Arsitektur Singkat
