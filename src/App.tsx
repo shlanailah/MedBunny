@@ -1850,7 +1850,7 @@ export default function App() {
 
     {proofOpen && activeDose && <dialog className="proof-dialog" ref={node => { if (node && !node.open) node.showModal() }} onCancel={() => setProofOpen(false)} aria-labelledby="proof-title" aria-describedby="proof-description">
       <form onSubmit={event => void handleConfirm(event)}>
-        <span className="proof-symbol"><Icon name="pill" size={26} /></span>
+        <span className="proof-symbol"><img src="/assets/Kawaii_Heart_Medicine_Bottle.png" alt="" /></span>
         <h2 id="proof-title">Have you taken your medicine?</h2>
         <p id="proof-description">Confirm your {activeDose.medicationName} dose. A photo is optional and stays on this device.<br />Ask a parent or caregiver to help.</p>
         <label className="proof-label" htmlFor="medicine-proof">Add a photo (optional)</label>

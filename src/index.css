@@ -177,7 +177,7 @@ main > header{height:64px;align-items:flex-end}
 .schedule-card .take-now{display:flex;align-items:center;gap:5px;font-weight:800;white-space:nowrap;padding:9px 12px}
 .proof-dialog{margin:auto;width:min(460px,calc(100% - 32px));max-height:calc(100dvh - 40px);overflow-y:auto;border:1px solid var(--sage);border-radius:28px;background:#fffefa;color:var(--forest);padding:30px;box-shadow:0 25px 90px #243c4333}
 .proof-dialog::backdrop{background:#263c4266;backdrop-filter:blur(5px)}
-.proof-symbol{width:54px;height:54px;display:grid;place-items:center;background:var(--sunshine-soft);border-radius:18px;color:#8b702f;margin-bottom:18px}
+.proof-symbol{width:72px;height:72px;display:grid;place-items:center;background:var(--sunshine-soft);border-radius:22px;color:#8b702f;margin-bottom:18px}.proof-symbol img{width:100%;height:100%;object-fit:contain;padding:6px}
 .proof-dialog h2{font-size:25px;line-height:1.3}
 .proof-dialog #proof-description{font-size:13px;line-height:1.8;color:#6c7c6b;margin:12px 0 22px}
 .proof-label{display:block;font-size:13px;font-weight:800;margin-bottom:9px}
