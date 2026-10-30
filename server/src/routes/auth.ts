@@ -15,13 +15,13 @@ const WELCOME_BONUS_STARS = 3
 
 const CredentialsSchema = z
   .object({
-    email: z.email('Format email tidak valid').max(254).openapi({ example: 'parent@example.com' }),
-    password: z.string().min(6, 'Password minimal 6 karakter').max(72, 'Password maksimal 72 karakter'),
+    email: z.email('Invalid email format').max(254).openapi({ example: 'parent@example.com' }),
+    password: z.string().min(6, 'Password must be at least 6 characters').max(72, 'Password must be 72 characters or fewer'),
   })
   .openapi('LoginInput')
 
 const SignupSchema = CredentialsSchema.extend({
-  name: z.string().trim().min(1, 'Nama wajib diisi').max(100, 'Nama maksimal 100 karakter'),
+  name: z.string().trim().min(1, 'Name is required').max(100, 'Name must be 100 characters or fewer'),
 }).openapi('SignupInput')
 
 async function loadSession(userId: string, mode: SessionMode, childId: string | null) {
@@ -30,7 +30,7 @@ async function loadSession(userId: string, mode: SessionMode, childId: string | 
     prisma.child.findMany({
       where: { userId },
       orderBy: { createdAt: 'asc' },
-      select: { id: true, nickname: true },
+      select: { id: true, nickname: true, birthYear: true },
     }),
   ])
 
@@ -46,7 +46,7 @@ const signupRoute = createRoute({
   method: 'post',
   path: '/auth/signup',
   tags: ['Auth'],
-  summary: 'Buat akun orang tua',
+  summary: 'Create a parent account',
   request: {
     body: {
       required: true,
@@ -60,10 +60,10 @@ const signupRoute = createRoute({
   responses: {
     201: {
       content: { 'application/json': { schema: SessionSchema } },
-      description: 'Akun berhasil dibuat dan sesi langsung aktif.',
+      description: 'Account created and signed in.',
     },
-    400: errorResponse('Data pendaftaran tidak valid.'),
-    409: errorResponse('Email sudah terdaftar.'),
+    400: errorResponse('Invalid sign-up data.'),
+    409: errorResponse('Email is already registered.'),
   },
 })
 
@@ -73,7 +73,7 @@ authRoutes.openapi(signupRoute, async (c) => {
 
   const existing = await prisma.user.findUnique({ where: { email } })
   if (existing) {
-    return apiError(c, 409, 'EMAIL_TAKEN', 'Email ini sudah terdaftar.', 'email')
+    return apiError(c, 409, 'EMAIL_TAKEN', 'This email is already registered.', 'email')
   }
 
   const passwordHash = await hash(input.password, 12)
@@ -103,7 +103,7 @@ authRoutes.openapi(signupRoute, async (c) => {
     return c.json(session, 201)
   } catch (error) {
     if ((error as { code?: string }).code === 'P2002') {
-      return apiError(c, 409, 'EMAIL_TAKEN', 'Email ini sudah terdaftar.', 'email')
+      return apiError(c, 409, 'EMAIL_TAKEN', 'This email is already registered.', 'email')
     }
     throw error
   }
@@ -113,7 +113,7 @@ const loginRoute = createRoute({
   method: 'post',
   path: '/auth/login',
   tags: ['Auth'],
-  summary: 'Masuk ke akun',
+  summary: 'Sign in',
   request: {
     body: {
       required: true,
@@ -127,10 +127,10 @@ const loginRoute = createRoute({
   responses: {
     200: {
       content: { 'application/json': { schema: SessionSchema } },
-      description: 'Login berhasil.',
+      description: 'Signed in.',
     },
-    400: errorResponse('Data login tidak valid.'),
-    401: errorResponse('Email atau password salah.'),
+    400: errorResponse('Invalid sign-in data.'),
+    401: errorResponse('Incorrect email or password.'),
   },
 })
 
@@ -143,7 +143,7 @@ authRoutes.openapi(loginRoute, async (c) => {
 
   if (!user || !passwordMatches) {
     // Pesan selalu sama supaya email mana yang terdaftar tidak bocor.
-    return apiError(c, 401, 'INVALID_CREDENTIALS', 'Email atau password salah.')
+    return apiError(c, 401, 'INVALID_CREDENTIALS', 'Incorrect email or password.')
   }
 
   await setSessionCookie(c, user.id, 'parent')
@@ -155,10 +155,10 @@ const logoutRoute = createRoute({
   method: 'post',
   path: '/auth/logout',
   tags: ['Auth'],
-  summary: 'Keluar dari akun',
+  summary: 'Sign out',
   responses: {
-    204: { description: 'Cookie sesi dihapus.' },
-    401: errorResponse('Belum masuk.'),
+    204: { description: 'Session cookie cleared.' },
+    401: errorResponse('Not signed in.'),
   },
 })
 
@@ -174,13 +174,13 @@ const meRoute = createRoute({
   method: 'get',
   path: '/auth/me',
   tags: ['Auth'],
-  summary: 'Ambil sesi yang sedang aktif',
+  summary: 'Get the current session',
   responses: {
     200: {
       content: { 'application/json': { schema: SessionSchema } },
-      description: 'Data pengguna dan anak yang terhubung.',
+      description: 'The user and linked children.',
     },
-    401: errorResponse('Belum masuk.'),
+    401: errorResponse('Not signed in.'),
   },
 })
 
@@ -191,7 +191,7 @@ authRoutes.openapi(meRoute, async (c) => {
   const children = await prisma.child.findMany({
     where: { userId: user.id },
     orderBy: { createdAt: 'asc' },
-    select: { id: true, nickname: true },
+    select: { id: true, nickname: true, birthYear: true },
   })
 
   return c.json(

@@ -86,9 +86,9 @@ const listDosesRoute = createRoute({
   method: 'get',
   path: '/children/{childId}/doses',
   tags: ['Doses'],
-  summary: 'Daftar dosis pada rentang tanggal',
+  summary: 'List doses in a date range',
   description:
-    'Baris dosis dibuat otomatis (lazy) dari jadwal obat. Rentang maksimal 62 hari.',
+    'Dose rows are created lazily from the medication schedule. Maximum range is 62 days.',
   request: {
     params: ChildParamsSchema,
     query: DoseQuerySchema,
@@ -96,11 +96,11 @@ const listDosesRoute = createRoute({
   responses: {
     200: {
       content: { 'application/json': { schema: z.array(DoseLogSchema) } },
-      description: 'Daftar dosis beserta status yang dihitung dari waktu sekarang.',
+      description: 'Doses with a status computed from the current time.',
     },
-    400: errorResponse('Rentang tanggal tidak valid.'),
-    401: errorResponse('Belum masuk.'),
-    404: errorResponse('Anak tidak ditemukan.'),
+    400: errorResponse('Invalid date range.'),
+    401: errorResponse('Not signed in.'),
+    404: errorResponse('Child not found.'),
   },
 })
 
@@ -111,14 +111,14 @@ doseRoutes.openapi(listDosesRoute, async (c) => {
 
   const rangeDays = differenceInCalendarDays(parseISO(to), parseISO(from)) + 1
   if (rangeDays < 1) {
-    return apiError(c, 400, 'INVALID_RANGE', 'Tanggal "to" harus sama atau setelah "from".', 'to')
+    return apiError(c, 400, 'INVALID_RANGE', '"to" must be on or after "from".', 'to')
   }
   if (rangeDays > MAX_RANGE_DAYS) {
     return apiError(
       c,
       400,
       'RANGE_TOO_LARGE',
-      `Rentang maksimal ${MAX_RANGE_DAYS} hari per permintaan.`,
+      `The range can be at most ${MAX_RANGE_DAYS} days per request.`,
       'to',
     )
   }
@@ -153,7 +153,7 @@ const confirmDoseRoute = createRoute({
   method: 'post',
   path: '/doses/{id}/confirm',
   tags: ['Doses'],
-  summary: 'Konfirmasi dosis dan beri 1 bintang',
+  summary: 'Confirm a dose and award 1 star',
   request: { params: DoseParamsSchema },
   responses: {
     200: {
@@ -165,12 +165,12 @@ const confirmDoseRoute = createRoute({
           }),
         },
       },
-      description: 'Dosis tercatat dan satu bintang ditambahkan.',
+      description: 'Dose recorded and one star added.',
     },
-    401: errorResponse('Belum masuk.'),
-    404: errorResponse('Dosis tidak ditemukan.'),
-    409: errorResponse('Dosis sudah pernah dikonfirmasi.'),
-    422: errorResponse('Dosis belum waktunya dikonfirmasi.'),
+    401: errorResponse('Not signed in.'),
+    404: errorResponse('Dose not found.'),
+    409: errorResponse('Dose was already confirmed.'),
+    422: errorResponse('This dose cannot be confirmed yet.'),
   },
 })
 
@@ -189,10 +189,10 @@ doseRoutes.openapi(confirmDoseRoute, async (c) => {
 
   if (!dose) return notFound(c)
   if (dose.confirmedAt) {
-    return apiError(c, 409, 'ALREADY_CONFIRMED', 'Dosis ini sudah dikonfirmasi.')
+    return apiError(c, 409, 'ALREADY_CONFIRMED', 'This dose has already been confirmed.')
   }
   if (dose.scheduledAt.getTime() - Date.now() > MAX_EARLY_MS) {
-    return apiError(c, 422, 'NOT_YET', 'Belum waktunya dosis ini dikonfirmasi.')
+    return apiError(c, 422, 'NOT_YET', "It's not time to confirm this dose yet.")
   }
 
   const confirmedAt = new Date()
@@ -206,7 +206,7 @@ doseRoutes.openapi(confirmDoseRoute, async (c) => {
     })
 
     if (count === 0) {
-      throw new ApiError(409, 'ALREADY_CONFIRMED', 'Dosis ini sudah dikonfirmasi.')
+      throw new ApiError(409, 'ALREADY_CONFIRMED', 'This dose has already been confirmed.')
     }
 
     await tx.starTransaction.create({

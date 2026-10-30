@@ -16,18 +16,18 @@ const balanceRoute = createRoute({
   method: 'get',
   path: '/children/{childId}/stars',
   tags: ['Stars'],
-  summary: 'Saldo dan total bintang anak',
+  summary: "Child's star balance and total",
   description:
-    'balance = semua transaksi (dipakai Kids mode), earned = hanya transaksi positif (label "stars collected").',
+    'balance = all transactions (used in Kids mode), earned = positive transactions only ("stars collected" label).',
   request: { params: ChildParamsSchema },
   responses: {
     200: {
       content: { 'application/json': { schema: StarsSchema } },
-      description: 'Saldo dihitung dari ledger star_transactions.',
+      description: 'Computed from the star_transactions ledger.',
     },
-    401: errorResponse('Belum masuk.'),
-    403: errorResponse('Hanya bisa dibuka dari Parent mode.'),
-    404: errorResponse('Anak tidak ditemukan.'),
+    401: errorResponse('Not signed in.'),
+    403: errorResponse('Only available in Parent mode.'),
+    404: errorResponse('Child not found.'),
   },
 })
 

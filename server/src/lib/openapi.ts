@@ -17,7 +17,7 @@ export function createRouter() {
           c,
           400,
           'VALIDATION_ERROR',
-          issue?.message ?? 'Data yang dikirim tidak valid.',
+          issue?.message ?? 'The submitted data is not valid.',
           field,
         )
       }

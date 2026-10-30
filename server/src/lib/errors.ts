@@ -41,5 +41,5 @@ export function isUuid(value: string): boolean {
 }
 
 export function notFound(c: Context) {
-  return apiError(c, 404, 'NOT_FOUND', 'Data tidak ditemukan.')
+  return apiError(c, 404, 'NOT_FOUND', 'Not found.')
 }

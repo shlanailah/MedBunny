@@ -67,6 +67,8 @@ model Child {
   userId           String            @db.Uuid
   user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   nickname         String?           @db.VarChar(40)
+  birthYear        Int?
+  historyClearedAt DateTime?         @db.Timestamptz(3) // dosis sebelum waktu ini tidak dibuat ulang
   createdAt        DateTime          @default(now()) @db.Timestamptz(3)
   medications      Medication[]
   starTransactions StarTransaction[]

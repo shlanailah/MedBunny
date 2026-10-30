@@ -12,6 +12,7 @@ export type SessionUser = {
 export type Child = {
   id: string
   nickname: string | null
+  birthYear: number | null
 }
 
 export type SessionMode = 'parent' | 'child'
@@ -222,7 +223,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       headers,
     })
   } catch {
-    throw new ApiError(0, 'NETWORK_ERROR', 'Tidak dapat terhubung ke server. Coba lagi sebentar.')
+    throw new ApiError(0, 'NETWORK_ERROR', 'Unable to reach the server. Please try again in a moment.')
   }
 
   if (response.status === 204) return undefined as T
@@ -247,7 +248,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     throw new ApiError(
       response.status,
       code ?? 'REQUEST_FAILED',
-      message ?? 'Terjadi kesalahan. Coba lagi sebentar.',
+      message ?? 'Something went wrong. Please try again in a moment.',
       field,
       details,
     )
@@ -366,5 +367,28 @@ export const api = {
 
   endPlaySession(childId: string) {
     return request<void>(`/children/${childId}/play-sessions/current/end`, { method: 'POST' })
+  },
+
+  clearHistory(childId: string, password: string) {
+    return request<{ deleted: number }>(`/children/${childId}/history/clear`, {
+      method: 'POST',
+      skipAuthRedirect: true,
+      body: JSON.stringify({ password }),
+    })
+  },
+
+  deleteAccount(password: string) {
+    return request<void>('/me', {
+      method: 'DELETE',
+      skipAuthRedirect: true,
+      body: JSON.stringify({ password }),
+    })
+  },
+
+  updateChild(childId: string, input: { nickname: string; birthYear: number | null }) {
+    return request<Child>(`/children/${childId}`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    })
   },
 }

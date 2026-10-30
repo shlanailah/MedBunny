@@ -47,15 +47,15 @@ const listRoute = createRoute({
   method: 'get',
   path: '/children/{childId}/medications',
   tags: ['Medications'],
-  summary: 'Daftar obat milik satu anak',
+  summary: "List a child's medications",
   request: { params: ChildParamsSchema },
   responses: {
     200: {
       content: { 'application/json': { schema: z.array(MedicationSchema) } },
-      description: 'Daftar obat beserta jadwalnya.',
+      description: 'Medications with their schedules.',
     },
-    401: errorResponse('Belum masuk.'),
-    404: errorResponse('Anak tidak ditemukan.'),
+    401: errorResponse('Not signed in.'),
+    404: errorResponse('Child not found.'),
   },
 })
 
@@ -74,7 +74,7 @@ const createMedicationRoute = createRoute({
   method: 'post',
   path: '/children/{childId}/medications',
   tags: ['Medications'],
-  summary: 'Tambah obat',
+  summary: 'Add a medication',
   request: {
     params: ChildParamsSchema,
     body: {
@@ -85,11 +85,11 @@ const createMedicationRoute = createRoute({
   responses: {
     201: {
       content: { 'application/json': { schema: MedicationSchema } },
-      description: 'Obat berhasil ditambahkan.',
+      description: 'Medication added.',
     },
-    400: errorResponse('Data obat tidak valid.'),
-    401: errorResponse('Belum masuk.'),
-    404: errorResponse('Anak tidak ditemukan.'),
+    400: errorResponse('Invalid medication data.'),
+    401: errorResponse('Not signed in.'),
+    404: errorResponse('Child not found.'),
   },
 })
 
@@ -119,7 +119,7 @@ const updateMedicationRoute = createRoute({
   method: 'put',
   path: '/medications/{id}',
   tags: ['Medications'],
-  summary: 'Ubah obat',
+  summary: 'Update a medication',
   request: {
     params: MedicationParamsSchema,
     body: {
@@ -130,11 +130,11 @@ const updateMedicationRoute = createRoute({
   responses: {
     200: {
       content: { 'application/json': { schema: MedicationSchema } },
-      description: 'Obat berhasil diperbarui.',
+      description: 'Medication updated.',
     },
-    400: errorResponse('Data obat tidak valid.'),
-    401: errorResponse('Belum masuk.'),
-    404: errorResponse('Obat tidak ditemukan.'),
+    400: errorResponse('Invalid medication data.'),
+    401: errorResponse('Not signed in.'),
+    404: errorResponse('Medication not found.'),
   },
 })
 

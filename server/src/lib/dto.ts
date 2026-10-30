@@ -16,10 +16,11 @@ export function toUserDto(user: User) {
   }
 }
 
-export function toChildDto(child: Pick<Child, 'id' | 'nickname'>) {
+export function toChildDto(child: Pick<Child, 'id' | 'nickname' | 'birthYear'>) {
   return {
     id: child.id,
     nickname: child.nickname,
+    birthYear: child.birthYear,
   }
 }
 

@@ -34,13 +34,13 @@ const GameParamsSchema = z.object({
 
 const KidsSettingsInputSchema = z
   .object({
-    sessionMinutes: z.number().int().min(5, 'Minimal 5 menit').max(30, 'Maksimal 30 menit'),
+    sessionMinutes: z.number().int().min(5, 'At least 5 minutes').max(30, 'At most 30 minutes'),
     endReminder: z.boolean(),
     reminderBeforeMinutes: z
       .number()
       .int()
-      .min(1, 'Minimal 1 menit')
-      .max(30, 'Maksimal 30 menit'),
+      .min(1, 'At least 1 minute')
+      .max(30, 'At most 30 minutes'),
   })
   .openapi('KidsModeSettingsInput')
 
@@ -76,16 +76,16 @@ const getSettingsRoute = createRoute({
   method: 'get',
   path: '/children/{childId}/kids-settings',
   tags: ['Kids'],
-  summary: 'Pengaturan sesi Kids mode',
+  summary: 'Kids mode session settings',
   request: { params: ChildParamsSchema },
   responses: {
     200: {
       content: { 'application/json': { schema: KidsSettingsSchema } },
-      description: 'Pengaturan sesi bermain anak.',
+      description: "The child's play session settings.",
     },
-    401: errorResponse('Belum masuk.'),
-    403: errorResponse('Hanya bisa dibuka dari Parent mode.'),
-    404: errorResponse('Anak tidak ditemukan.'),
+    401: errorResponse('Not signed in.'),
+    403: errorResponse('Only available in Parent mode.'),
+    404: errorResponse('Child not found.'),
   },
 })
 
@@ -111,7 +111,7 @@ const updateSettingsRoute = createRoute({
   method: 'put',
   path: '/children/{childId}/kids-settings',
   tags: ['Kids'],
-  summary: 'Ubah pengaturan sesi Kids mode',
+  summary: 'Update Kids mode session settings',
   request: {
     params: ChildParamsSchema,
     body: {
@@ -122,12 +122,12 @@ const updateSettingsRoute = createRoute({
   responses: {
     200: {
       content: { 'application/json': { schema: KidsSettingsSchema } },
-      description: 'Pengaturan berhasil disimpan.',
+      description: 'Settings saved.',
     },
-    400: errorResponse('Pengaturan tidak valid.'),
-    401: errorResponse('Belum masuk.'),
-    403: errorResponse('Hanya bisa dibuka dari Parent mode.'),
-    404: errorResponse('Anak tidak ditemukan.'),
+    400: errorResponse('Invalid settings.'),
+    401: errorResponse('Not signed in.'),
+    403: errorResponse('Only available in Parent mode.'),
+    404: errorResponse('Child not found.'),
   },
 })
 
@@ -155,13 +155,13 @@ const endSessionRoute = createRoute({
   method: 'post',
   path: '/children/{childId}/play-sessions/current/end',
   tags: ['Kids'],
-  summary: 'Akhiri sesi bermain yang sedang aktif',
+  summary: 'End the active play session',
   request: { params: ChildParamsSchema },
   responses: {
-    204: { description: 'Sesi bermain diakhiri.' },
-    401: errorResponse('Belum masuk.'),
-    403: errorResponse('Hanya bisa dibuka dari Parent mode.'),
-    404: errorResponse('Anak tidak ditemukan.'),
+    204: { description: 'Play session ended.' },
+    401: errorResponse('Not signed in.'),
+    403: errorResponse('Only available in Parent mode.'),
+    404: errorResponse('Child not found.'),
   },
 })
 
@@ -182,14 +182,14 @@ const stateRoute = createRoute({
   tags: ['Kids'],
   summary: 'State Kids mode',
   description:
-    'childId diambil dari token, bukan URL. Bunny tidur kalau ada dosis hari ini yang sudah jatuh tempo dan belum dikonfirmasi.',
+    "childId comes from the token, not the URL. Bunny sleeps when one of today's due doses is unconfirmed.",
   responses: {
     200: {
       content: { 'application/json': { schema: KidsStateSchema } },
-      description: 'Nama anak, kondisi Bunny, saldo bintang, dan sesi bermain aktif.',
+      description: "Child's name, Bunny's state, star balance, and active play session.",
     },
-    401: errorResponse('Belum masuk.'),
-    403: errorResponse('Hanya bisa dibuka dari Kids mode.'),
+    401: errorResponse('Not signed in.'),
+    403: errorResponse('Only available in Kids mode.'),
   },
 })
 
@@ -234,7 +234,8 @@ kidsRoutes.openapi(stateRoute, async (c) => {
 
   return c.json(
     {
-      childName: child.nickname?.trim() || user.name.split(' ')[0] || 'kiddo',
+      // Nama dari Child Profile; jangan pakai nama orang tua.
+      childName: child.nickname?.trim() || 'friend',
       bunny: sleeping ? ('sleeping' as const) : ('awake' as const),
       starBalance: starAggregate._sum.amount ?? 0,
       session: playSession
@@ -252,9 +253,9 @@ const startGameRoute = createRoute({
   method: 'post',
   path: '/kids/games/{game}/start',
   tags: ['Kids'],
-  summary: 'Mulai satu kali main dan potong 1 bintang',
+  summary: 'Start one play and spend 1 star',
   description:
-    'Memakai row lock pada anak supaya dua ketukan cepat tidak membuat saldo bintang negatif.',
+    'Locks the child row so two quick taps cannot make the star balance negative.',
   request: { params: GameParamsSchema },
   responses: {
     200: {
@@ -263,12 +264,12 @@ const startGameRoute = createRoute({
           schema: z.object({ starBalance: z.number().int() }),
         },
       },
-      description: 'Game dimulai dan 1 bintang tercatat sebagai GAME_PLAY.',
+      description: 'Game started and 1 star recorded as GAME_PLAY.',
     },
-    401: errorResponse('Belum masuk.'),
-    403: errorResponse('Hanya bisa dibuka dari Kids mode.'),
-    409: errorResponse('Bintang belum cukup.'),
-    423: errorResponse('Waktu bermain sudah habis.'),
+    401: errorResponse('Not signed in.'),
+    403: errorResponse('Only available in Kids mode.'),
+    409: errorResponse('Not enough stars.'),
+    423: errorResponse('Play time is over.'),
   },
 })
 
@@ -290,7 +291,7 @@ kidsRoutes.openapi(startGameRoute, async (c) => {
         })
 
         if (!session) {
-          throw new ApiError(423, 'PLAY_TIME_OVER', 'Waktunya istirahat dulu!')
+          throw new ApiError(423, 'PLAY_TIME_OVER', 'Time for a little rest!')
         }
 
         const aggregate = await tx.starTransaction.aggregate({
@@ -300,7 +301,7 @@ kidsRoutes.openapi(startGameRoute, async (c) => {
         const balance = aggregate._sum.amount ?? 0
 
         if (balance < GAME_COST) {
-          throw new ApiError(409, 'NOT_ENOUGH_STARS', 'Bintangnya belum cukup')
+          throw new ApiError(409, 'NOT_ENOUGH_STARS', 'Not enough stars yet')
         }
 
         await tx.starTransaction.create({
@@ -319,7 +320,7 @@ kidsRoutes.openapi(startGameRoute, async (c) => {
     )
   } catch (error) {
     if ((error as { code?: string }).code === 'P2028') {
-      throw new ApiError(409, 'GAME_START_BUSY', 'Coba lagi sebentar ya.')
+      throw new ApiError(409, 'GAME_START_BUSY', 'Please try again in a moment.')
     }
     throw error
   }

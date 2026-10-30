@@ -11,23 +11,23 @@ export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
   const token = getCookie(c, SESSION_COOKIE)
 
   if (!token) {
-    return apiError(c, 401, 'UNAUTHENTICATED', 'Silakan masuk terlebih dahulu.')
+    return apiError(c, 401, 'UNAUTHENTICATED', 'Please sign in first.')
   }
 
   let payload: Record<string, unknown>
   try {
     payload = await verify(token, env.JWT_SECRET, 'HS256')
   } catch {
-    return apiError(c, 401, 'UNAUTHENTICATED', 'Sesi sudah berakhir. Silakan masuk lagi.')
+    return apiError(c, 401, 'UNAUTHENTICATED', 'Your session has ended. Please sign in again.')
   }
 
   if (typeof payload.sub !== 'string' || !isUuid(payload.sub)) {
-    return apiError(c, 401, 'UNAUTHENTICATED', 'Sesi tidak valid. Silakan masuk lagi.')
+    return apiError(c, 401, 'UNAUTHENTICATED', 'Invalid session. Please sign in again.')
   }
 
   const user = await prisma.user.findUnique({ where: { id: payload.sub } })
   if (!user) {
-    return apiError(c, 401, 'UNAUTHENTICATED', 'Akun tidak ditemukan. Silakan masuk lagi.')
+    return apiError(c, 401, 'UNAUTHENTICATED', 'Account not found. Please sign in again.')
   }
 
   // Token lama (sebelum tahap 2) tidak punya mode; anggap Parent mode.
@@ -36,14 +36,14 @@ export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
   if (mode === 'child') {
     const childId = typeof payload.childId === 'string' ? payload.childId : ''
     if (!isUuid(childId)) {
-      return apiError(c, 401, 'UNAUTHENTICATED', 'Sesi Kids mode tidak valid. Silakan masuk lagi.')
+      return apiError(c, 401, 'UNAUTHENTICATED', 'Invalid Kids mode session. Please sign in again.')
     }
 
     const child = await prisma.child.findFirst({
       where: { id: childId, userId: user.id },
     })
     if (!child) {
-      return apiError(c, 401, 'UNAUTHENTICATED', 'Profil anak tidak ditemukan. Silakan masuk lagi.')
+      return apiError(c, 401, 'UNAUTHENTICATED', 'Child profile not found. Please sign in again.')
     }
 
     c.set('child', child)
@@ -60,7 +60,7 @@ export const requireParentMode: MiddlewareHandler<AppEnv> = async (c, next) => {
       c,
       403,
       'PARENT_MODE_REQUIRED',
-      'Fitur ini hanya bisa dibuka dari Parent mode.',
+      'This feature is only available in Parent mode.',
     )
   }
 
@@ -69,7 +69,7 @@ export const requireParentMode: MiddlewareHandler<AppEnv> = async (c, next) => {
 
 export const requireChildMode: MiddlewareHandler<AppEnv> = async (c, next) => {
   if (c.get('sessionMode') !== 'child') {
-    return apiError(c, 403, 'CHILD_MODE_REQUIRED', 'Fitur ini hanya bisa dibuka dari Kids mode.')
+    return apiError(c, 403, 'CHILD_MODE_REQUIRED', 'This feature is only available in Kids mode.')
   }
 
   await next()

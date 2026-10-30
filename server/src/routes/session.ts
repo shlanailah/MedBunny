@@ -15,7 +15,7 @@ const PIN_LOCK_MS = 5 * 60 * 1000
 
 const SetPinInputSchema = z
   .object({
-    currentPassword: z.string().min(1, 'Password wajib diisi').max(72),
+    currentPassword: z.string().min(1, 'Password is required').max(72),
     pin: PinSchema,
   })
   .openapi('SetPinInput')
@@ -28,10 +28,10 @@ const ModeInputSchema = z
   })
   .superRefine((value, ctx) => {
     if (value.mode === 'child' && !value.childId) {
-      ctx.addIssue({ code: 'custom', path: ['childId'], message: 'childId wajib diisi' })
+      ctx.addIssue({ code: 'custom', path: ['childId'], message: 'childId is required' })
     }
     if (value.mode === 'parent' && !value.pin) {
-      ctx.addIssue({ code: 'custom', path: ['pin'], message: 'PIN wajib diisi' })
+      ctx.addIssue({ code: 'custom', path: ['pin'], message: 'PIN is required' })
     }
   })
   .openapi('ModeInput')
@@ -51,8 +51,8 @@ const setPinRoute = createRoute({
   method: 'put',
   path: '/me/pin',
   tags: ['Session'],
-  summary: 'Atur atau ganti PIN Parent mode',
-  description: 'Membutuhkan password akun. PIN disimpan sebagai hash bcrypt.',
+  summary: 'Set or change the Parent mode PIN',
+  description: 'Requires the account password. The PIN is stored as a bcrypt hash.',
   request: {
     body: {
       required: true,
@@ -60,10 +60,10 @@ const setPinRoute = createRoute({
     },
   },
   responses: {
-    204: { description: 'PIN berhasil disimpan.' },
-    400: errorResponse('PIN atau password tidak valid.'),
-    401: errorResponse('Password salah atau belum masuk.'),
-    403: errorResponse('Hanya bisa dilakukan dari Parent mode.'),
+    204: { description: 'PIN saved.' },
+    400: errorResponse('Invalid PIN or password.'),
+    401: errorResponse('Incorrect password or not signed in.'),
+    403: errorResponse('Only available in Parent mode.'),
   },
 })
 
@@ -73,7 +73,7 @@ sessionRoutes.openapi(setPinRoute, async (c) => {
 
   const passwordMatches = await compare(currentPassword, user.passwordHash)
   if (!passwordMatches) {
-    return apiError(c, 401, 'INVALID_PASSWORD', 'Password salah.')
+    return apiError(c, 401, 'INVALID_PASSWORD', 'Incorrect password.')
   }
 
   const pinHash = await hash(pin, 12)
@@ -94,9 +94,9 @@ const switchModeRoute = createRoute({
   method: 'post',
   path: '/session/mode',
   tags: ['Session'],
-  summary: 'Pindah antara Parent mode dan Kids mode',
+  summary: 'Switch between Parent mode and Kids mode',
   description:
-    'Parent → Kids tidak memakai PIN dan sekaligus memulai sesi bermain. Kids → Parent wajib PIN.',
+    'Parent → Kids needs no PIN and starts a play session. Kids → Parent requires the PIN.',
   request: {
     body: {
       required: true,
@@ -106,14 +106,14 @@ const switchModeRoute = createRoute({
   responses: {
     200: {
       content: { 'application/json': { schema: ModeResponseSchema } },
-      description: 'Mode berhasil diganti dan cookie sesi diperbarui.',
+      description: 'Mode switched and session cookie updated.',
     },
-    400: errorResponse('Data mode tidak valid.'),
-    401: errorResponse('PIN salah atau belum masuk.'),
-    403: errorResponse('Arah perpindahan mode tidak diizinkan.'),
-    404: errorResponse('Anak tidak ditemukan.'),
-    409: errorResponse('PIN belum diatur.'),
-    423: errorResponse('PIN terkunci sementara atau waktu bermain habis.'),
+    400: errorResponse('Invalid mode data.'),
+    401: errorResponse('Incorrect PIN or not signed in.'),
+    403: errorResponse('This mode switch is not allowed.'),
+    404: errorResponse('Child not found.'),
+    409: errorResponse('PIN has not been set.'),
+    423: errorResponse('PIN is temporarily locked or play time is over.'),
   },
 })
 
@@ -124,7 +124,7 @@ sessionRoutes.openapi(switchModeRoute, async (c) => {
 
   if (input.mode === 'child') {
     if (sessionMode !== 'parent') {
-      return apiError(c, 403, 'PARENT_MODE_REQUIRED', 'Kembali ke Parent mode terlebih dahulu.')
+      return apiError(c, 403, 'PARENT_MODE_REQUIRED', 'Switch back to Parent mode first.')
     }
 
     if (!user.pinHash) {
@@ -132,7 +132,7 @@ sessionRoutes.openapi(switchModeRoute, async (c) => {
         c,
         409,
         'PIN_NOT_SET',
-        'Atur PIN dulu sebelum masuk Kids mode.',
+        'Set a PIN before entering Kids mode.',
       )
     }
 
@@ -189,7 +189,7 @@ sessionRoutes.openapi(switchModeRoute, async (c) => {
   }
 
   if (sessionMode !== 'child') {
-    return apiError(c, 403, 'CHILD_MODE_REQUIRED', 'Kamu sedang di Parent mode.')
+    return apiError(c, 403, 'CHILD_MODE_REQUIRED', 'You are already in Parent mode.')
   }
 
   const child = c.get('child')
@@ -200,14 +200,14 @@ sessionRoutes.openapi(switchModeRoute, async (c) => {
       c,
       423,
       'PIN_LOCKED',
-      'Terlalu banyak percobaan PIN. Coba lagi nanti.',
+      'Too many PIN attempts. Please try again later.',
       undefined,
       { lockedUntil: user.pinLockedUntil.toISOString() },
     )
   }
 
   if (!user.pinHash) {
-    return apiError(c, 409, 'PIN_NOT_SET', 'PIN belum diatur untuk akun ini.')
+    return apiError(c, 409, 'PIN_NOT_SET', 'No PIN has been set for this account.')
   }
 
   const pinMatches = await compare(input.pin!, user.pinHash)
@@ -226,7 +226,7 @@ sessionRoutes.openapi(switchModeRoute, async (c) => {
         c,
         423,
         'PIN_LOCKED',
-        'Terlalu banyak percobaan PIN. Coba lagi dalam 5 menit.',
+        'Too many PIN attempts. Try again in 5 minutes.',
         undefined,
         { lockedUntil: lockedUntil.toISOString() },
       )
@@ -237,7 +237,7 @@ sessionRoutes.openapi(switchModeRoute, async (c) => {
       data: { pinFailedCount: failedCount },
     })
 
-    return apiError(c, 401, 'INVALID_PIN', 'PIN salah.', undefined, {
+    return apiError(c, 401, 'INVALID_PIN', 'Incorrect PIN.', undefined, {
       remainingAttempts: MAX_PIN_ATTEMPTS - failedCount,
     })
   }

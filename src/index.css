@@ -44,7 +44,8 @@ main > header{height:64px;align-items:flex-end}
 .history-table-heading{font-size:8px;letter-spacing:1.4px;font-weight:800;color:#97a18b;background:#f4f5ed;border-bottom:1px solid #e8eadf}
 .history-record+.history-record{border-top:1px solid #eeeee4}
 .history-medication{display:flex;align-items:center;gap:13px}
-.history-medication>.medicine-icon{width:41px;height:41px;border-radius:13px;flex-shrink:0}
+.history-medication>.medicine-icon{width:41px;height:41px;border-radius:13px;flex-shrink:0;overflow:hidden}
+.history-medication .medicine-illustration{height:100%;margin:0;padding:3px}
 .history-medication h3{font-size:13px;margin:0;font-weight:800}
 .history-medication p{font-size:12px;color:#939d87;margin-top:4px}
 .history-record-date,.history-record-time{font-size:11px;color:#87947a}
@@ -575,7 +576,7 @@ main > header{height:64px;align-items:flex-end}
 .kids-stars-card>div{position:relative;display:flex;flex-direction:column;z-index:1}
 .kids-stars-card strong{font-size:45px;line-height:1;color:var(--forest)}
 .kids-stars-card span{margin-top:7px;color:#78652e;font-size:14px;font-weight:900}
-.kids-games-heading{display:flex;align-items:end;justify-content:space-between;gap:28px;margin-bottom:24px}
+.kids-games-heading{display:flex;align-items:end;justify-content:space-between;gap:28px;margin:48px 0 24px}
 .kids-games-heading .kids-kicker{background:var(--lavender-soft);color:#665a7e}
 .kids-games-heading h2{margin-top:11px;font-size:28px;letter-spacing:-.8px}
 .kids-games-heading>p{max-width:280px;margin:0;color:#778477;font-size:12px;line-height:1.7;text-align:right}
@@ -832,6 +833,7 @@ button.kids-game-card{width:100%;color:inherit;font-family:inherit;text-align:le
   .kids-welcome-card h1{font-size:29px}
   .kids-welcome-card p{font-size:13px;line-height:1.5}
   .kids-welcome-card>img{right:-5%;width:52%}
+  .kids-games-heading{margin-top:34px}
   .kids-games-heading h2{font-size:23px}
   .kids-games-grid{grid-template-columns:1fr;gap:16px}
   .kids-game-card{min-height:190px;grid-template-columns:140px 1fr;text-align:left;border-radius:24px;padding:18px}
@@ -875,6 +877,11 @@ button.kids-game-card{width:100%;color:inherit;font-family:inherit;text-align:le
 .profile-check input{width:18px;height:18px;padding:0;accent-color:#6f977d}
 .profile-notice{margin:18px 0 0;padding:12px 15px;border-radius:15px;background:var(--sunshine-soft);border:1px solid color-mix(in srgb,var(--sunshine) 70%,white);color:#756125;font-size:12px;font-weight:800;line-height:1.5}
 .profile-success{margin:0;color:#4f7258;font-size:12px;font-weight:800;line-height:1.5}
+.profile-danger{padding:12px 18px;border-radius:22px;border:1px solid #e6a597;background:#fff6f3;color:#a3402c;font-size:12px;font-weight:900}
+.profile-danger.is-selected{background:#c4553f;border-color:#c4553f;color:#fff}
+.profile-danger:disabled{opacity:.55;cursor:not-allowed}
+.profile-warning{margin:0;padding:10px 12px;border-radius:14px;background:#fff1ec;color:#93402f;font-size:12px;font-weight:800;line-height:1.5}
+.profile-notify-status{display:flex;align-items:center;gap:7px;margin:0;color:#4f6a58;font-size:12px;font-weight:800}
 @media(max-width:600px){
   .profile-setting-copy strong{font-size:14px}
   .profile-setting-copy span{font-size:11px}

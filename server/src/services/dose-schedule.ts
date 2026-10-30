@@ -28,14 +28,19 @@ export async function ensureDoseLogs(
 
   const toEnd = fromZonedTime(`${ensureToKey}T23:59:59.999`, timezone)
 
-  const medications = await prisma.medication.findMany({
-    where: {
-      childId,
-      frequency: { not: 'AS_NEEDED' },
-      startDate: { lte: toEnd },
-    },
-    include: { times: true, days: true },
-  })
+  const [child, medications] = await Promise.all([
+    prisma.child.findUnique({ where: { id: childId }, select: { historyClearedAt: true } }),
+    prisma.medication.findMany({
+      where: {
+        childId,
+        frequency: { not: 'AS_NEEDED' },
+        startDate: { lte: toEnd },
+      },
+      include: { times: true, days: true },
+    }),
+  ])
+  // Riwayat yang sudah dihapus orang tua tidak boleh muncul lagi sebagai "missed".
+  const clearedAt = child?.historyClearedAt ?? null
 
   const rows: Prisma.DoseLogCreateManyInput[] = []
 
@@ -58,11 +63,13 @@ export async function ensureDoseLogs(
       }
 
       for (const { time } of medication.times) {
+        const scheduledAt = fromZonedTime(`${dayKey}T${time}:00`, timezone)
+        if (clearedAt && scheduledAt <= clearedAt) continue
         rows.push({
           medicationId: medication.id,
           medicationName: medication.name,
           dose: medication.dose,
-          scheduledAt: fromZonedTime(`${dayKey}T${time}:00`, timezone),
+          scheduledAt,
         })
       }
     }

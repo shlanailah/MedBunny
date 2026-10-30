@@ -6,7 +6,9 @@ import { HTTPException } from 'hono/http-exception'
 import { logger } from 'hono/logger'
 import { apiError, ApiError } from './lib/errors.js'
 import { createRouter } from './lib/openapi.js'
+import { accountRoutes } from './routes/account.js'
 import { authRoutes } from './routes/auth.js'
+import { childRoutes } from './routes/children.js'
 import { doseRoutes } from './routes/doses.js'
 import { kidsRoutes } from './routes/kids.js'
 import { medicationRoutes } from './routes/medications.js'
@@ -21,11 +23,11 @@ const healthRoute = createRoute({
   method: 'get',
   path: '/health',
   tags: ['Health'],
-  summary: 'Cek status server',
+  summary: 'Check server status',
   responses: {
     200: {
       content: { 'application/json': { schema: z.object({ ok: z.boolean() }) } },
-      description: 'Server berjalan.',
+      description: 'Server is running.',
     },
   },
 })
@@ -34,6 +36,8 @@ app.openapi(healthRoute, (c) => c.json({ ok: true }, 200))
 
 app.route('/api', authRoutes)
 app.route('/api', sessionRoutes)
+app.route('/api', childRoutes)
+app.route('/api', accountRoutes)
 app.route('/api', medicationRoutes)
 app.route('/api', doseRoutes)
 app.route('/api', starRoutes)
@@ -45,13 +49,13 @@ app.doc('/api/openapi.json', {
     title: 'MedBunny API',
     version: '1.0.0',
     description:
-      'API MedBunny: autentikasi, jadwal obat, dosis, bintang, PIN, dan Kids mode. Foto dokumentasi tidak pernah dikirim ke server.',
+      'MedBunny API: authentication, medication schedules, doses, stars, PIN, and Kids mode. Documentation photos are never sent to the server.',
   },
 })
 
 app.get('/api/docs', swaggerUI({ url: '/api/openapi.json', title: 'MedBunny API' }))
 
-app.notFound((c) => apiError(c, 404, 'NOT_FOUND', 'Endpoint tidak ditemukan.'))
+app.notFound((c) => apiError(c, 404, 'NOT_FOUND', 'Endpoint not found.'))
 
 app.onError((error, c) => {
   if (error instanceof ApiError) {
@@ -68,7 +72,7 @@ app.onError((error, c) => {
   }
 
   console.error('[medbunny] Unhandled error:', error)
-  return apiError(c, 500, 'INTERNAL_ERROR', 'Terjadi kesalahan pada server.')
+  return apiError(c, 500, 'INTERNAL_ERROR', 'Something went wrong on the server.')
 })
 
 export default app

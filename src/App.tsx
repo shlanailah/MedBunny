@@ -76,7 +76,7 @@ function doseBucket(value: string) {
 }
 
 function errorMessage(error: unknown) {
-  return error instanceof ApiError ? error.message : 'Terjadi kesalahan. Coba lagi sebentar.'
+  return error instanceof ApiError ? error.message : 'Something went wrong. Please try again in a moment.'
 }
 
 function shuffle<T>(items: readonly T[]): T[] {
@@ -237,7 +237,7 @@ function MedicationHistory({ childId }: { childId: string }) {
       {!loading && !loadError && rows.map((row, index) => {
         const scheduled = new Date(row.scheduledAt)
         const statusLabel = row.status.charAt(0).toUpperCase() + row.status.slice(1)
-        return <article className="history-record" key={row.id}><div className="history-medication"><span className={`medicine-icon ${['coral', 'yellow', 'blue'][index % 3]}`}><Icon name="pill" size={21} /></span><div><h3>{row.medicationName}</h3><p>{row.dose}</p></div></div><time className="history-record-date" dateTime={row.scheduledAt}>{scheduled.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</time><span className="history-record-time">{timeLabel(row.scheduledAt)}</span><span className={`history-record-status ${row.status}`}><Icon name={row.status === 'recorded' ? 'check' : 'history'} size={14} />{statusLabel}</span></article>
+        return <article className="history-record" key={row.id}><div className="history-medication"><span className={`medicine-icon ${['coral', 'yellow', 'blue'][index % 3]}`}><img className="medicine-illustration" src="/assets/Kawaii_Heart_Medicine_Bottle.png" alt="" /></span><div><h3>{row.medicationName}</h3><p>{row.dose}</p></div></div><time className="history-record-date" dateTime={row.scheduledAt}>{scheduled.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</time><span className="history-record-time">{timeLabel(row.scheduledAt)}</span><span className={`history-record-status ${row.status}`}><Icon name={row.status === 'recorded' ? 'check' : 'history'} size={14} />{statusLabel}</span></article>
       })}
       {!loading && !loadError && !rows.length && <div className="history-empty"><Icon name="history" size={33} /><h3>No records found</h3><p>Try another medication name, date, or status.</p>{hasFilters && <button onClick={resetFilters}>Clear filters</button>}</div>}
     </div>
@@ -302,16 +302,39 @@ function MedicationSchedule({ childId, onChanged }: { childId: string; onChanged
 }
 
 const profileSettings = [
-  { key: 'child', icon: 'child', title: 'Child Profile', description: 'Nickname and essential basic information', color: 'yellow' },
-  { key: 'notifications', icon: 'bell', title: 'Notifications', description: 'Reminder and notification preferences', color: 'blue' },
+  { key: 'child', icon: 'child', title: 'Child Profile', description: 'Your child’s name and birth year', color: 'yellow' },
+  { key: 'notifications', icon: 'bell', title: 'Notifications', description: 'Browser reminders while MedBunny is open', color: 'blue' },
   { key: 'security', icon: 'shield', title: 'Security', description: 'PIN or authentication for Parent Mode', color: 'sage' },
   { key: 'kids', icon: 'timer', title: 'Kids Mode Settings', description: 'Session length and end-of-play reminders', color: 'lavender' },
-  { key: 'data', icon: 'trash', title: 'Data & Account', description: 'Export or delete data with parent confirmation', color: 'coral' },
+  { key: 'data', icon: 'trash', title: 'Data & Account', description: 'Clear medication history or delete your account', color: 'coral' },
 ] as const
 
-type ProfileSection = 'security' | 'kids' | null
+type ProfileSection = (typeof profileSettings)[number]['key'] | null
 
-function ProfilePage({ user, child, onBack, onLogout, initialSection, notice, onPinSaved }: {
+const CURRENT_YEAR = new Date().getFullYear()
+const MIN_BIRTH_YEAR = 2000
+
+// Preferensi notifikasi disimpan per perangkat, karena notifikasi hanya muncul di tab yang terbuka.
+const NOTIFY_KEY = 'medbunny:dose-notifications'
+const notificationsSupported = typeof window !== 'undefined' && 'Notification' in window
+
+function readNotifyPref() {
+  try {
+    return notificationsSupported && Notification.permission === 'granted' && localStorage.getItem(NOTIFY_KEY) === 'on'
+  } catch {
+    return false
+  }
+}
+
+function writeNotifyPref(on: boolean) {
+  try {
+    localStorage.setItem(NOTIFY_KEY, on ? 'on' : 'off')
+  } catch {
+    // Tanpa storage, preferensi hanya berlaku sampai halaman dimuat ulang.
+  }
+}
+
+function ProfilePage({ user, child, onBack, onLogout, initialSection, notice, onPinSaved, onChildSaved, notificationsOn, onNotificationsChange, onHistoryCleared, onAccountDeleted }: {
   user: SessionUser
   child?: Child
   onBack: () => void
@@ -319,8 +342,24 @@ function ProfilePage({ user, child, onBack, onLogout, initialSection, notice, on
   initialSection?: ProfileSection
   notice?: string
   onPinSaved?: () => void
+  onChildSaved?: (child: Child) => void
+  notificationsOn: boolean
+  onNotificationsChange: (on: boolean) => void
+  onHistoryCleared: () => void
+  onAccountDeleted: () => void
 }) {
   const [section, setSection] = useState<ProfileSection>(initialSection ?? null)
+  const [notifyMessage, setNotifyMessage] = useState('')
+  const [dataPassword, setDataPassword] = useState('')
+  const [dataAction, setDataAction] = useState<'history' | 'account' | null>(null)
+  const [dataBusy, setDataBusy] = useState(false)
+  const [dataError, setDataError] = useState('')
+  const [dataMessage, setDataMessage] = useState('')
+  const [childName, setChildName] = useState(child?.nickname ?? '')
+  const [birthYear, setBirthYear] = useState(child?.birthYear ? String(child.birthYear) : '')
+  const [childBusy, setChildBusy] = useState(false)
+  const [childError, setChildError] = useState('')
+  const [childMessage, setChildMessage] = useState('')
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPin, setNewPin] = useState('')
   const [confirmPin, setConfirmPin] = useState('')
@@ -346,24 +385,89 @@ function ProfilePage({ user, child, onBack, onLogout, initialSection, notice, on
     return () => { cancelled = true }
   }, [section, child?.id])
 
+  async function turnOnNotifications() {
+    setNotifyMessage('')
+    if (!notificationsSupported) return
+    const permission = await Notification.requestPermission()
+    if (permission !== 'granted') {
+      setNotifyMessage('Notifications are blocked. Allow them for this site in your browser settings, then try again.')
+      return
+    }
+    writeNotifyPref(true)
+    onNotificationsChange(true)
+    new Notification('Notifications are on', { body: 'MedBunny will remind you when it’s time for medicine.', icon: '/assets/logo.png' })
+  }
+
+  function turnOffNotifications() {
+    writeNotifyPref(false)
+    onNotificationsChange(false)
+    setNotifyMessage('')
+  }
+
+  async function runDataAction(event: FormEvent) {
+    event.preventDefault()
+    if (!child || !dataAction) return
+
+    setDataBusy(true)
+    setDataError('')
+    setDataMessage('')
+    try {
+      if (dataAction === 'history') {
+        const { deleted } = await api.clearHistory(child.id, dataPassword)
+        setDataMessage(`Medication history cleared (${deleted} ${deleted === 1 ? 'record' : 'records'}).`)
+        setDataPassword('')
+        setDataAction(null)
+        onHistoryCleared()
+      } else {
+        await api.deleteAccount(dataPassword)
+        onAccountDeleted()
+      }
+    } catch (error) {
+      setDataError(errorMessage(error))
+    } finally {
+      setDataBusy(false)
+    }
+  }
+
+  async function saveChild(event: FormEvent) {
+    event.preventDefault()
+    if (!child) return
+
+    setChildBusy(true)
+    setChildError('')
+    setChildMessage('')
+    try {
+      const updated = await api.updateChild(child.id, {
+        nickname: childName.trim(),
+        birthYear: birthYear ? Number(birthYear) : null,
+      })
+      onChildSaved?.(updated)
+      setChildMessage('Child profile saved.')
+    } catch (error) {
+      setChildError(errorMessage(error))
+    } finally {
+      setChildBusy(false)
+    }
+  }
+
   async function savePin(event: FormEvent) {
     event.preventDefault()
     setSecurityError('')
     setSecurityMessage('')
 
     if (newPin.length !== 4) {
-      setSecurityError('PIN harus 4 digit angka.')
+      setSecurityError('PIN must be 4 digits.')
       return
     }
     if (newPin !== confirmPin) {
-      setSecurityError('Konfirmasi PIN tidak cocok.')
+      setSecurityError('The PINs do not match.')
       return
     }
 
     setSecurityBusy(true)
     try {
       await api.setPin(currentPassword, newPin)
-      setSecurityMessage('PIN berhasil disimpan. Sekarang kamu bisa masuk Kids mode.')
+      setSecurityMessage('PIN saved. You can now switch to Kids mode.')
       onPinSaved?.()
       setCurrentPassword('')
       setNewPin('')
@@ -385,7 +489,7 @@ function ProfilePage({ user, child, onBack, onLogout, initialSection, notice, on
     try {
       const updated = await api.updateKidsSettings(child.id, settings)
       setSettings(updated)
-      setSettingsMessage('Pengaturan Kids mode disimpan.')
+      setSettingsMessage('Kids mode settings saved.')
     } catch (error) {
       setSettingsError(errorMessage(error))
     } finally {
@@ -401,7 +505,7 @@ function ProfilePage({ user, child, onBack, onLogout, initialSection, notice, on
     setSettingsMessage('')
     try {
       await api.endPlaySession(child.id)
-      setSettingsMessage('Sesi bermain yang aktif sudah diakhiri.')
+      setSettingsMessage('The active play session has ended.')
     } catch (error) {
       setSettingsError(errorMessage(error))
     } finally {
@@ -413,11 +517,11 @@ function ProfilePage({ user, child, onBack, onLogout, initialSection, notice, on
     <div className="add-page-title"><button className="back-medication" onClick={onBack} aria-label="Back"><Icon name="chevron" /></button><div><div className="eyebrow">YOUR FAMILY, YOUR WAY</div><h1 id="profile-title">Profile</h1></div></div>
     <div className="profile-card">
       <img className="peeking-bunny" src="/assets/bunny-peeking.png" alt="" />
-      <div className="profile-summary"><span className="profile-photo"><Icon name="user" size={34} /></span><div><h2>{user.name}</h2><p>{user.email}</p>{child?.nickname && <p>Child nickname: {child.nickname}</p>}</div><span className="profile-edit" aria-hidden="true"><Icon name="edit" size={19} /></span></div>
+      <div className="profile-summary"><span className="profile-photo"><Icon name="user" size={34} /></span><div><h2>{user.name}</h2><p>{user.email}</p>{child?.nickname && <p>Child: {child.nickname}{child.birthYear ? ` · born ${child.birthYear}` : ''}</p>}</div></div>
       {notice && <p className="profile-notice" role="status">{notice}</p>}
       <ul className="profile-settings">
         {profileSettings.map(item => {
-          const interactive = item.key === 'security' || item.key === 'kids'
+          const interactive = item.key !== 'notifications' || notificationsSupported
           const active = section === item.key
           return <li className={`profile-setting${active ? ' is-active' : ''}`} key={item.key}>
             <button
@@ -434,28 +538,65 @@ function ProfilePage({ user, child, onBack, onLogout, initialSection, notice, on
               <span className="profile-setting-copy"><strong>{item.title}</strong><span>{item.description}</span></span>
               <Icon name={active ? 'down' : 'chevron'} size={17} />
             </button>
-            {active && item.key === 'security' && <form className="profile-panel" onSubmit={event => void savePin(event)}>
-              <p className="profile-panel-hint">PIN 4 digit dipakai untuk kembali dari Kids mode ke Parent mode.</p>
-              <label>Password akun<input type="password" autoComplete="current-password" required value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} /></label>
+            {active && item.key === 'child' && <form className="profile-panel" onSubmit={event => void saveChild(event)}>
+              <p className="profile-panel-hint">Bunny uses this name to greet your child in Kids mode.</p>
               <div className="profile-panel-row">
-                <label>PIN baru<input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={4} required value={newPin} onChange={event => setNewPin(event.target.value.replace(/\D/g, '').slice(0, 4))} /></label>
-                <label>Ulangi PIN<input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={4} required value={confirmPin} onChange={event => setConfirmPin(event.target.value.replace(/\D/g, '').slice(0, 4))} /></label>
+                <label>Child’s name<input type="text" autoComplete="off" required maxLength={40} pattern=".*\S.*" placeholder="e.g. Kia" value={childName} onChange={event => setChildName(event.target.value)} /></label>
+                <label>Birth year<input type="number" inputMode="numeric" min={MIN_BIRTH_YEAR} max={CURRENT_YEAR} placeholder={String(CURRENT_YEAR - 4)} value={birthYear} onChange={event => setBirthYear(event.target.value.replace(/\D/g, '').slice(0, 4))} /></label>
+              </div>
+              {childError && <p className="proof-error" role="alert">{childError}</p>}
+              {childMessage && <p className="profile-success" role="status">{childMessage}</p>}
+              <button className="profile-save" type="submit" disabled={childBusy}>{childBusy ? 'Saving…' : 'Save child profile'}</button>
+            </form>}
+            {active && item.key === 'notifications' && <div className="profile-panel">
+              <p className="profile-panel-hint">MedBunny shows a browser notification at each dose time. Reminders only appear while MedBunny is open in a browser tab on this device.</p>
+              <p className="profile-notify-status"><Icon name="bell" size={16} />{notificationsOn ? 'Reminders are on for this browser.' : 'Reminders are off.'}</p>
+              {notifyMessage && <p className="proof-error" role="alert">{notifyMessage}</p>}
+              {notificationsOn
+                ? <button className="profile-secondary" type="button" onClick={turnOffNotifications}>Turn off reminders</button>
+                : <button className="profile-save" type="button" onClick={() => void turnOnNotifications()}>Turn on reminders</button>}
+            </div>}
+            {active && item.key === 'data' && <form className="profile-panel" onSubmit={event => void runDataAction(event)}>
+              <p className="profile-panel-hint"><strong>Clear history</strong> removes past dose records. Medications, upcoming doses, and stars are kept.<br /><strong>Delete account</strong> permanently removes your account and all of your child’s data.</p>
+              <div className="profile-panel-actions">
+                <button className={dataAction === 'history' ? 'profile-save' : 'profile-secondary'} type="button" disabled={dataBusy} onClick={() => { setDataAction('history'); setDataError(''); setDataMessage('') }}>Clear history</button>
+                <button className={`profile-danger${dataAction === 'account' ? ' is-selected' : ''}`} type="button" disabled={dataBusy} onClick={() => { setDataAction('account'); setDataError(''); setDataMessage('') }}>Delete account</button>
+              </div>
+              {dataAction && <>
+                <p className="profile-warning" role="alert">{dataAction === 'history'
+                  ? 'Past dose records will be deleted and cannot be restored.'
+                  : 'This permanently deletes your account, medications, history, and stars. This cannot be undone.'}</p>
+                <label>Enter your password to confirm<input type="password" autoComplete="current-password" required value={dataPassword} onChange={event => setDataPassword(event.target.value)} /></label>
+                <div className="profile-panel-actions">
+                  <button className={dataAction === 'account' ? 'profile-danger is-selected' : 'profile-save'} type="submit" disabled={dataBusy || !dataPassword}>{dataBusy ? 'Working…' : dataAction === 'history' ? 'Clear history' : 'Delete my account'}</button>
+                  <button className="profile-secondary" type="button" disabled={dataBusy} onClick={() => { setDataAction(null); setDataPassword(''); setDataError('') }}>Cancel</button>
+                </div>
+              </>}
+              {dataError && <p className="proof-error" role="alert">{dataError}</p>}
+              {dataMessage && <p className="profile-success" role="status">{dataMessage}</p>}
+            </form>}
+            {active && item.key === 'security' && <form className="profile-panel" onSubmit={event => void savePin(event)}>
+              <p className="profile-panel-hint">The 4-digit PIN is used to switch from Kids mode back to Parent mode.</p>
+              <label>Account password<input type="password" autoComplete="current-password" required value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} /></label>
+              <div className="profile-panel-row">
+                <label>New PIN<input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={4} required value={newPin} onChange={event => setNewPin(event.target.value.replace(/\D/g, '').slice(0, 4))} /></label>
+                <label>Confirm PIN<input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={4} required value={confirmPin} onChange={event => setConfirmPin(event.target.value.replace(/\D/g, '').slice(0, 4))} /></label>
               </div>
               {securityError && <p className="proof-error" role="alert">{securityError}</p>}
               {securityMessage && <p className="profile-success" role="status">{securityMessage}</p>}
-              <button className="profile-save" type="submit" disabled={securityBusy}>{securityBusy ? 'Menyimpan…' : 'Simpan PIN'}</button>
+              <button className="profile-save" type="submit" disabled={securityBusy}>{securityBusy ? 'Saving…' : 'Save PIN'}</button>
             </form>}
             {active && item.key === 'kids' && <form className="profile-panel" onSubmit={event => void saveSettings(event)}>
-              {!settings && !settingsError && <p className="profile-panel-hint">Memuat pengaturan…</p>}
+              {!settings && !settingsError && <p className="profile-panel-hint">Loading settings…</p>}
               {settingsError && <p className="proof-error" role="alert">{settingsError}</p>}
               {settings && <>
-                <label>Panjang sesi bermain (menit)<input type="number" min={5} max={30} required value={settings.sessionMinutes} onChange={event => setSettings({ ...settings, sessionMinutes: Number(event.target.value) })} /></label>
-                <label className="profile-check"><input type="checkbox" checked={settings.endReminder} onChange={event => setSettings({ ...settings, endReminder: event.target.checked })} />Ingatkan sebelum sesi berakhir</label>
-                <label>Pengingat sebelum berakhir (menit)<input type="number" min={1} max={30} required value={settings.reminderBeforeMinutes} onChange={event => setSettings({ ...settings, reminderBeforeMinutes: Number(event.target.value) })} /></label>
+                <label>Play session length (minutes)<input type="number" min={5} max={30} required value={settings.sessionMinutes} onChange={event => setSettings({ ...settings, sessionMinutes: Number(event.target.value) })} /></label>
+                <label className="profile-check"><input type="checkbox" checked={settings.endReminder} onChange={event => setSettings({ ...settings, endReminder: event.target.checked })} />Remind before the session ends</label>
+                <label>Reminder before the end (minutes)<input type="number" min={1} max={30} required value={settings.reminderBeforeMinutes} onChange={event => setSettings({ ...settings, reminderBeforeMinutes: Number(event.target.value) })} /></label>
                 {settingsMessage && <p className="profile-success" role="status">{settingsMessage}</p>}
                 <div className="profile-panel-actions">
-                  <button className="profile-save" type="submit" disabled={settingsBusy}>{settingsBusy ? 'Menyimpan…' : 'Simpan pengaturan'}</button>
-                  <button className="profile-secondary" type="button" disabled={settingsBusy} onClick={() => void endCurrentSession()}>Akhiri sesi bermain</button>
+                  <button className="profile-save" type="submit" disabled={settingsBusy}>{settingsBusy ? 'Saving…' : 'Save settings'}</button>
+                  <button className="profile-secondary" type="button" disabled={settingsBusy} onClick={() => void endCurrentSession()}>End play session</button>
                 </div>
               </>}
             </form>}
@@ -769,7 +910,7 @@ function KidsMatchUp({ onExit, onPlayAgain, canPlayAgain }: {
       <strong>All pairs found!</strong>
       <div className="kids-complete-actions">
         {canPlayAgain && <button onClick={onPlayAgain}>Play again</button>}
-        <button onClick={() => onExit(true)}>Kembali</button>
+        <button onClick={() => onExit(true)}>Back</button>
       </div>
     </div>}
   </section>
@@ -895,7 +1036,7 @@ function KidsDressUp({ onExit, onPlayAgain, canPlayAgain }: {
     </div>
     <div className="dress-up-actions">
       <button className="dress-up-reset" type="button" disabled={!hasAccessory} onClick={() => setStyle(EMPTY_STYLE)}>Reset</button>
-      <button className="dress-up-done" type="button" onClick={() => setFinished(true)}>Selesai</button>
+      <button className="dress-up-done" type="button" onClick={() => setFinished(true)}>Done</button>
     </div>
     {finished && <div className="dress-up-finish" role="dialog" aria-labelledby="dress-up-finish-title" aria-modal="true">
       <div className="dress-up-finish-card">
@@ -904,7 +1045,7 @@ function KidsDressUp({ onExit, onPlayAgain, canPlayAgain }: {
         <div className="dress-up-bunny-wrap">{bunnyFrame}</div>
         <div className="kids-complete-actions">
           {canPlayAgain && <button onClick={onPlayAgain}>Play again</button>}
-          <button onClick={() => onExit(true)}>Kembali</button>
+          <button onClick={() => onExit(true)}>Back</button>
         </div>
       </div>
     </div>}
@@ -996,7 +1137,7 @@ function KidsColorHunt({ onExit, onPlayAgain, canPlayAgain }: {
       <div><strong>Color hunt complete!</strong><p>You found every color.</p></div>
       <div className="kids-complete-actions">
         {canPlayAgain && <button onClick={onPlayAgain}>Play again</button>}
-        <button onClick={() => onExit(true)}>Kembali</button>
+        <button onClick={() => onExit(true)}>Back</button>
       </div>
     </div>}
   </section>
@@ -1004,7 +1145,7 @@ function KidsColorHunt({ onExit, onPlayAgain, canPlayAgain }: {
 
 const KIDS_GAMES: { id: GameId; title: string; description: string; image: string; tone: string }[] = [
   { id: 'garden', title: 'Bunny’s Garden', description: 'Grow a happy little garden', image: '/assets/schedule-bunny.png', tone: 'garden' },
-  { id: 'style', title: 'Bunny’s Style', description: 'Pick cute accessories for Bunny', image: '/assets/kids-dress-up.png', tone: 'dress-up' },
+  { id: 'style', title: 'Bunny’s Style', description: 'Pick cute accessories for Bunny', image: '/assets/bunny style cover.png', tone: 'dress-up' },
   { id: 'match-up', title: 'Bunny’s Match-Up', description: 'Find all the matching pairs', image: '/assets/kids-match-up.png', tone: 'match-up' },
   { id: 'color-hunt', title: 'Bunny’s Color Hunt', description: 'Spot colors in the garden', image: '/assets/kids-color-hunt.png', tone: 'color-hunt' },
 ]
@@ -1018,10 +1159,12 @@ function KidsDashboard({ kidsState, onPlay, message }: {
   const noStars = kidsState.starBalance <= 0
   const canPlay = !sessionExpired && !noStars
   const bunnyMessage = message || (sessionExpired
-    ? 'Waktunya istirahat dulu!'
+    ? 'Time for a little rest!'
     : noStars
-      ? 'Bintang baru datang setelah jadwal obat berikutnya.'
+      ? 'New stars arrive after the next medicine time.'
       : null)
+  // Bunny tidur saat istirahat atau menunggu bintang baru.
+  const bunnyResting = sessionExpired || noStars || kidsState.bunny === 'sleeping'
 
   return <section className="kids-dashboard" aria-labelledby="kids-title">
     <div className="kids-top-grid">
@@ -1043,7 +1186,7 @@ function KidsDashboard({ kidsState, onPlay, message }: {
     </div>
 
     {bunnyMessage && <div className={`kids-bunny-note${sessionExpired ? ' rest' : ''}`} role="status">
-      <img src={kidsState.bunny === 'sleeping' ? '/assets/bunny-sleeping.png' : '/assets/bunny-peeking.png'} alt="" />
+      <img src={bunnyResting ? '/assets/bunny-sleeping.png' : '/assets/bunny-peeking.png'} alt="" />
       <p>{bunnyMessage}</p>
     </div>}
 
@@ -1101,6 +1244,9 @@ export default function App() {
   const [activeDose, setActiveDose] = useState<DoseLog | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [confirmError, setConfirmError] = useState('')
+  const [starPopupOpen, setStarPopupOpen] = useState(false)
+  const [notificationsOn, setNotificationsOn] = useState(readNotifyPref)
+  const notifiedDoses = useRef(new Set<string>())
   const [homeRefresh, setHomeRefresh] = useState(0)
   const [homeData, setHomeData] = useState<{ weekDoses: DoseLog[]; balance: number }>({ weekDoses: [], balance: 0 })
   const [homeLoading, setHomeLoading] = useState(true)
@@ -1232,6 +1378,27 @@ export default function App() {
   }, [child?.id, mode, kidsRefresh])
 
   useEffect(() => {
+    if (!session || !notificationsOn || !notificationsSupported || Notification.permission !== 'granted') return
+    // Jadwal tetap dipakai saat Kids mode, karena data minggu ini sudah dimuat dari Parent mode.
+    const timers = homeData.weekDoses
+      .filter(dose => !dose.confirmedAt && !notifiedDoses.current.has(dose.id))
+      .map(dose => {
+        const delay = new Date(dose.scheduledAt).getTime() - Date.now()
+        if (delay <= 0) return null
+        return window.setTimeout(() => {
+          notifiedDoses.current.add(dose.id)
+          const notification = new Notification('Time for medicine', {
+            body: `${dose.medicationName} · ${dose.dose}`,
+            icon: '/assets/logo.png',
+            tag: dose.id,
+          })
+          notification.onclick = () => window.focus()
+        }, delay)
+      })
+    return () => timers.forEach(timer => { if (timer !== null) window.clearTimeout(timer) })
+  }, [session, notificationsOn, homeData.weekDoses])
+
+  useEffect(() => {
     setReminderVisible(false)
     const reminderAt = kidsState?.session?.reminderAt
     if (mode !== 'child' || !reminderAt) return
@@ -1285,6 +1452,7 @@ export default function App() {
     setActiveDose(null)
     setConfirming(false)
     setConfirmError('')
+    setStarPopupOpen(false)
     setHomeData({ weekDoses: [], balance: 0 })
     setHomeError('')
     setHomeLoading(true)
@@ -1354,7 +1522,7 @@ export default function App() {
       if (error instanceof ApiError && error.code === 'PIN_NOT_SET') {
         if (page !== 'Profile') setPreviousPage(page)
         setProfileSection('security')
-        setProfileNotice('Atur PIN dulu sebelum masuk Kids mode.')
+        setProfileNotice('Set a PIN before switching to Kids mode.')
         setPage('Profile')
       } else {
         setKidsMessage(errorMessage(error))
@@ -1385,15 +1553,15 @@ export default function App() {
           : null
         setPin('')
         setPinError(remaining
-          ? `PIN salah. Sisa ${remaining} percobaan.`
-          : 'PIN salah. Coba lagi ya.')
+          ? `Incorrect PIN. ${remaining} ${remaining === 1 ? 'attempt' : 'attempts'} left.`
+          : 'Incorrect PIN. Please try again.')
       } else if (error instanceof ApiError && error.code === 'PIN_LOCKED') {
         const lockedUntil = typeof error.details.lockedUntil === 'string'
           ? error.details.lockedUntil
           : null
         setPin('')
         setPinLockedUntil(lockedUntil)
-        setPinError('Terlalu banyak percobaan PIN.')
+        setPinError('Too many PIN attempts.')
       } else {
         setPinError(errorMessage(error))
       }
@@ -1424,6 +1592,7 @@ export default function App() {
       setProof('')
       setProofName('')
       setHomeRefresh(value => value + 1)
+      setStarPopupOpen(true)
     } catch (error) {
       if (error instanceof ApiError && error.code === 'ALREADY_CONFIRMED') {
         setProofOpen(false)
@@ -1559,7 +1728,7 @@ export default function App() {
   const avatarLetter = session.user.name.trim().charAt(0).toUpperCase() || 'P'
   const greeting = now.getHours() < 12 ? 'Good morning' : now.getHours() < 18 ? 'Good afternoon' : 'Good evening'
   const clockTime = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).split(' ')
-  const childName = kidsState?.childName ?? child.nickname?.trim() ?? session.user.name.split(' ')[0] ?? 'kiddo'
+  const childName = kidsState?.childName || child.nickname?.trim() || 'friend'
   const pinLockMinutes = lockMinutesLeft(pinLockedUntil, now)
 
   return <div className={`app ${isKidsMode ? 'kids-active' : ''}`}>
@@ -1604,8 +1773,8 @@ export default function App() {
       <div className={`page-content ${isKidsMode ? 'kids-page-content' : ''}`}>
         {isKidsMode ? kidsScreen === 'dashboard' ? (kidsState
           ? <KidsDashboard kidsState={kidsState} onPlay={requestPlay} message={kidsMessage} />
-          : <div className="app-loading kids-loading"><img src="/assets/bunny-sleeping.png" alt="" /><p>{kidsMessage || (kidsLoading ? 'Getting Bunny ready…' : 'Bunny is resting.')}</p>{!kidsLoading && <button className="profile-save" type="button" onClick={() => setKidsRefresh(value => value + 1)}>Coba lagi</button>}</div>
-        ) : renderKidsGame(kidsScreen) : page === 'Profile' ? <ProfilePage user={session.user} child={child} onBack={() => { setPage(previousPage); setProfileSection(null); setProfileNotice('') }} onLogout={() => void handleLogout()} initialSection={profileSection} notice={profileNotice} onPinSaved={() => setProfileNotice('')} /> : page === 'Schedule' ? <MedicationSchedule childId={child.id} onChanged={() => setHomeRefresh(value => value + 1)} /> : page === 'History' ? <MedicationHistory childId={child.id} /> : <>
+          : <div className="app-loading kids-loading"><img src="/assets/bunny-sleeping.png" alt="" /><p>{kidsMessage || (kidsLoading ? 'Getting Bunny ready…' : 'Bunny is resting.')}</p>{!kidsLoading && <button className="profile-save" type="button" onClick={() => setKidsRefresh(value => value + 1)}>Try again</button>}</div>
+        ) : renderKidsGame(kidsScreen) : page === 'Profile' ? <ProfilePage user={session.user} child={child} onBack={() => { setPage(previousPage); setProfileSection(null); setProfileNotice('') }} onLogout={() => void handleLogout()} initialSection={profileSection} notice={profileNotice} onPinSaved={() => setProfileNotice('')} onChildSaved={updated => setSession(current => current && { ...current, children: current.children.map(item => item.id === updated.id ? updated : item) })} notificationsOn={notificationsOn} onNotificationsChange={setNotificationsOn} onHistoryCleared={() => setHomeRefresh(value => value + 1)} onAccountDeleted={() => { resetLocalSession(); setScreen('landing') }} /> : page === 'Schedule' ? <MedicationSchedule childId={child.id} onChanged={() => setHomeRefresh(value => value + 1)} /> : page === 'History' ? <MedicationHistory childId={child.id} /> : <>
           <div className="greeting"><div><div className="eyebrow">A LITTLE CARE GOES A LONG WAY</div><h1>{greeting}, {session.user.name.split(' ')[0]}!<span className="greeting-sun"><Icon name="sun" size={30} /></span></h1><p>{now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} <span>·</span> Let's make today a healthy one.</p></div><div className="greeting-clock"><span>LOCAL TIME</span><time dateTime={now.toTimeString().slice(0, 5)}>{clockTime[0]} <small>{clockTime[1]}</small></time></div></div>
           <section className="top-grid">
             <div className="week-card"><div className="section-heading"><h2>Your week at a glance</h2><span className="week-month"><span className="week-month-text">{now.toLocaleDateString('en-US', { month: 'long' })}</span></span></div><div className="week" aria-label={`Week of ${weekStart.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}–${weekEnd.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`}>{weekDays.map(day => <div key={day.key} className={`week-day${day.isToday ? ' selected' : ''}`} aria-current={day.isToday ? 'date' : undefined}><span>{day.label}</span><strong>{day.date}</strong><i className={day.hasDose ? 'has-dose' : ''} /></div>)}</div></div>
@@ -1623,8 +1792,8 @@ export default function App() {
 
     {reminderVisible && isKidsMode && <div className="kids-reminder-toast" role="status">
       <img src="/assets/bunny-peeking.png" alt="" />
-      <p>Sebentar lagi istirahat ya</p>
-      <button type="button" onClick={() => setReminderVisible(false)} aria-label="Tutup pengingat"><Icon name="close" size={16} /></button>
+      <p>Almost time for a little rest!</p>
+      <button type="button" onClick={() => setReminderVisible(false)} aria-label="Close reminder"><Icon name="close" size={16} /></button>
     </div>}
 
     {pinOpen && <dialog className="pin-dialog" ref={node => { if (node && !node.open) { node.showModal(); node.querySelector('input')?.focus() } }} onCancel={event => { event.preventDefault(); closePinDialog() }} onClick={event => { if (event.target === event.currentTarget) closePinDialog() }} aria-labelledby="pin-title" aria-describedby="pin-description">
@@ -1637,20 +1806,32 @@ export default function App() {
           <span className="pin-dots" aria-hidden="true">{[0, 1, 2, 3].map(index => <i key={index} className={index < pin.length ? 'filled' : ''} />)}</span>
           <input id="parent-pin" className="pin-input" type="text" inputMode="numeric" autoComplete="off" pattern="[0-9]*" maxLength={4} value={pin} disabled={pinBusy || pinLockMinutes > 0} onChange={event => setPin(event.target.value.replace(/\D/g, '').slice(0, 4))} autoFocus aria-label="Parent PIN, 4 digits" />
         </div>
-        {pinError && <p className="pin-error" role="alert">{pinError}{pinLockMinutes > 0 ? ` Coba lagi dalam ${pinLockMinutes} menit.` : ''}</p>}
+        {pinError && <p className="pin-error" role="alert">{pinError}{pinLockMinutes > 0 ? ` Try again in ${pinLockMinutes} ${pinLockMinutes === 1 ? 'minute' : 'minutes'}.` : ''}</p>}
         <button className="pin-submit" type="submit" disabled={pin.length !== 4 || pinBusy || pinLockMinutes > 0}>{pinBusy ? 'Checking…' : <>Switch to parent mode <Icon name="chevron" size={17} /></>}</button>
-        <button className="pin-forgot" type="button" disabled={pinBusy} onClick={() => void handleForgotPin()}>Lupa PIN?</button>
+        <button className="pin-forgot" type="button" disabled={pinBusy} onClick={() => void handleForgotPin()}>Forgot PIN?</button>
       </form>
     </dialog>}
 
     {pendingGame && <dialog className="play-confirm-dialog" ref={node => { if (node && !node.open) node.showModal() }} onCancel={event => { event.preventDefault(); if (!startingGame) setPendingGame(null) }} onClick={event => { if (event.target === event.currentTarget && !startingGame) setPendingGame(null) }} aria-labelledby="play-confirm-title" aria-describedby="play-confirm-description">
       <div className="play-confirm">
         <img src="/assets/happy-star.png" alt="" />
-        <h2 id="play-confirm-title">Pakai 1 ⭐ untuk main?</h2>
-        <p id="play-confirm-description">Bintang ini dipakai saat game dimulai.</p>
+        <h2 id="play-confirm-title">Use 1 ⭐ to play?</h2>
+        <p id="play-confirm-description">The star is used when the game starts.</p>
         <div className="play-confirm-actions">
-          <button className="play-confirm-yes" type="button" disabled={startingGame} onClick={() => void confirmStartGame()} aria-label="Ya, pakai satu bintang untuk main">{startingGame ? '…' : <Icon name="check" size={24} />}</button>
-          <button className="play-confirm-no" type="button" disabled={startingGame} onClick={() => setPendingGame(null)} aria-label="Tidak, kembali"><Icon name="close" size={22} /></button>
+          <button className="play-confirm-yes" type="button" disabled={startingGame} onClick={() => void confirmStartGame()} aria-label="Yes, use one star to play">{startingGame ? '…' : <Icon name="check" size={24} />}</button>
+          <button className="play-confirm-no" type="button" disabled={startingGame} onClick={() => setPendingGame(null)} aria-label="No, go back"><Icon name="close" size={22} /></button>
+        </div>
+      </div>
+    </dialog>}
+
+    {starPopupOpen && <dialog className="play-confirm-dialog" ref={node => { if (node && !node.open) node.showModal() }} onCancel={event => { event.preventDefault(); setStarPopupOpen(false) }} onClick={event => { if (event.target === event.currentTarget) setStarPopupOpen(false) }} aria-labelledby="star-popup-title" aria-describedby="star-popup-description">
+      <div className="play-confirm star-popup">
+        <img src="/assets/happy-star.png" alt="" />
+        <h2 id="star-popup-title">Congrats! You got 1 star</h2>
+        <p id="star-popup-description">Switch to Kids mode so your little one can play with Bunny?</p>
+        <div className="play-confirm-actions play-confirm-text">
+          <button className="play-confirm-finish" type="button" onClick={() => { setStarPopupOpen(false); void enterKidsMode() }}>Yes</button>
+          <button className="play-confirm-continue" type="button" onClick={() => setStarPopupOpen(false)}>No</button>
         </div>
       </div>
     </dialog>}
@@ -1658,11 +1839,11 @@ export default function App() {
     {exitConfirm && <dialog className="play-confirm-dialog" ref={node => { if (node && !node.open) node.showModal() }} onCancel={event => { event.preventDefault(); setExitConfirm(false) }} onClick={event => { if (event.target === event.currentTarget) setExitConfirm(false) }} aria-labelledby="exit-confirm-title" aria-describedby="exit-confirm-description">
       <div className="play-confirm exit-confirm">
         <img src="/assets/bunny-sleeping.png" alt="" />
-        <h2 id="exit-confirm-title">Selesai main?</h2>
-        <p id="exit-confirm-description">Bintangnya sudah terpakai ya.</p>
+        <h2 id="exit-confirm-title">Done playing?</h2>
+        <p id="exit-confirm-description">Your star has already been used.</p>
         <div className="play-confirm-actions play-confirm-text">
-          <button className="play-confirm-continue" type="button" onClick={() => setExitConfirm(false)}>Lanjut main</button>
-          <button className="play-confirm-finish" type="button" onClick={() => { setExitConfirm(false); goDashboard() }}>Selesai</button>
+          <button className="play-confirm-continue" type="button" onClick={() => setExitConfirm(false)}>Keep playing</button>
+          <button className="play-confirm-finish" type="button" onClick={() => { setExitConfirm(false); goDashboard() }}>I’m done</button>
         </div>
       </div>
     </dialog>}

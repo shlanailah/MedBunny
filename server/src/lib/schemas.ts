@@ -2,7 +2,7 @@ import { z } from '@hono/zod-openapi'
 
 export const TimeSchema = z
   .string()
-  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Gunakan format jam HH:mm')
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use the HH:mm time format')
   .openapi({ example: '08:00' })
 
 export const FrequencySchema = z.enum(['EVERY_DAY', 'SOME_DAYS', 'AS_NEEDED'])
@@ -14,32 +14,32 @@ export const GameSchema = z.enum(['GARDEN', 'STYLE', 'MATCH_UP', 'COLOR_HUNT'])
 export const GameIdSchema = z.enum(['garden', 'style', 'match-up', 'color-hunt'])
 export const PinSchema = z
   .string()
-  .regex(/^\d{4}$/, 'PIN harus 4 digit angka')
+  .regex(/^\d{4}$/, 'PIN must be 4 digits')
   .openapi({ example: '1234' })
 
 export const MedicationInputSchema = z
   .object({
-    name: z.string().trim().min(1, 'Nama obat wajib diisi').max(80, 'Nama obat maksimal 80 karakter'),
-    dose: z.string().trim().min(1, 'Dosis wajib diisi').max(40, 'Dosis maksimal 40 karakter'),
+    name: z.string().trim().min(1, 'Medication name is required').max(80, 'Medication name must be 80 characters or fewer'),
+    dose: z.string().trim().min(1, 'Dose is required').max(40, 'Dose must be 40 characters or fewer'),
     startDate: z.iso.date(),
     frequency: FrequencySchema,
-    times: z.array(TimeSchema).max(8, 'Maksimal 8 jam minum'),
+    times: z.array(TimeSchema).max(8, 'Up to 8 dose times'),
     meal: MealTimingSchema,
     days: z.array(WeekdaySchema),
-    note: z.string().trim().max(1000, 'Catatan maksimal 1000 karakter').optional(),
+    note: z.string().trim().max(1000, 'Notes must be 1000 characters or fewer').optional(),
   })
   .superRefine((value, ctx) => {
     if (value.frequency !== 'AS_NEEDED' && value.times.length === 0) {
-      ctx.addIssue({ code: 'custom', path: ['times'], message: 'Minimal satu jam minum' })
+      ctx.addIssue({ code: 'custom', path: ['times'], message: 'Add at least one dose time' })
     }
     if (value.frequency === 'AS_NEEDED' && value.times.length > 0) {
-      ctx.addIssue({ code: 'custom', path: ['times'], message: 'Obat "As needed" tidak punya jam tetap' })
+      ctx.addIssue({ code: 'custom', path: ['times'], message: '"As needed" medications have no fixed times' })
     }
     if (value.frequency === 'SOME_DAYS' && value.days.length === 0) {
-      ctx.addIssue({ code: 'custom', path: ['days'], message: 'Pilih minimal satu hari' })
+      ctx.addIssue({ code: 'custom', path: ['days'], message: 'Select at least one day' })
     }
     if (new Set(value.times).size !== value.times.length) {
-      ctx.addIssue({ code: 'custom', path: ['times'], message: 'Jam minum tidak boleh sama' })
+      ctx.addIssue({ code: 'custom', path: ['times'], message: 'Dose times must be different' })
     }
   })
 
@@ -55,6 +55,7 @@ export const ChildSchema = z
   .object({
     id: z.string(),
     nickname: z.string().nullable(),
+    birthYear: z.number().int().nullable(),
   })
   .openapi('Child')
 
