@@ -1,8 +1,36 @@
 # 🐰 MedBunny
 
-MedBunny adalah aplikasi web dengan **frontend React + Vite** dan **backend API berbasis Hono**, dalam satu repositori (monorepo) dan di-deploy ke Vercel.
+*Little Doses, Big Adventures.*
 
 🔗 **Demo langsung:** [med-bunny.vercel.app](https://med-bunny.vercel.app)
+
+---
+
+## 📖 Tentang MedBunny
+
+**MedBunny** adalah website pencatat rutinitas minum obat untuk **anak usia 2–7 tahun**. Banyak orang tua kesulitan mengajak anak minum obat, lupa apakah obat sudah diberikan, atau lelah mencatat manual. MedBunny membantu dengan jadwal, pencatatan dosis, dan maskot **Bunny** yang membuat rutinitas obat terasa lebih menyenangkan bagi anak.
+
+Website ini punya dua sisi:
+
+- 👨‍👩‍👧 **Parent mode** (untuk orang tua/pengasuh): mengatur jadwal obat, mencatat dosis yang sudah diminum, melihat riwayat, dan mengatur akun.
+- 🧒 **Kids mode** (untuk anak): bermain bersama Bunny memakai ⭐ bintang yang didapat dari rutinitas minum obat. Tersedia 4 mini-games: *Bunny's Garden*, *Bunny's Style*, *Bunny's Match-Up*, dan *Bunny's Color Hunt*.
+
+### Fitur utama
+
+- **Jadwal obat**: harian, hari tertentu, atau sesuai kebutuhan (*as needed*), dengan hingga 8 jam minum per hari.
+- **Pencatatan dosis** dengan konfirmasi **Mark as taken**, status *Recorded / Upcoming / Awaiting / Missed*, dan riwayat yang bisa difilter.
+- **Sistem bintang**: setiap dosis yang dikonfirmasi memberi 1 bintang, dan 1 bintang dipakai untuk memulai 1 game. Dosis yang terlewat tidak mengurangi bintang.
+- **Pengingat** lewat notifikasi browser.
+- **Kids mode terkunci PIN 4 digit**: anak tidak bisa membuka data obat, riwayat, atau pengaturan.
+- **Batas waktu bermain** yang bisa diatur orang tua (5–30 menit per sesi).
+
+> ⚕️ MedBunny **bukan pengganti dokter atau apoteker** dan tidak mendiagnosis penyakit atau menentukan dosis. Semua jadwal diisi orang tua sesuai label obat atau petunjuk tenaga kesehatan. Konfirmasi di aplikasi juga tidak membuktikan obat benar-benar diminum.
+
+---
+
+## 🏗️ Arsitektur Singkat
+
+MedBunny adalah satu repositori (monorepo) dengan **frontend React + Vite** dan **backend API berbasis Hono** yang di-deploy ke Vercel.
 
 ---
 
@@ -15,7 +43,7 @@ Gunakan akun berikut untuk mencoba aplikasi yang sudah di-deploy:
 | Email    | `demouinic@gmail.com`  |
 | Password | `demouinic`            |
 
-> ⚠️ Akun ini hanya untuk keperluan demo. Jangan gunakan untuk data pribadi atau sensitif.
+> ⚠️ Akun ini hanya untuk keperluan demo/penilaian. Jangan gunakan untuk data pribadi atau sensitif.
 
 ---
 
@@ -71,6 +99,8 @@ Routing di Vercel (`vercel.json`):
 
 ---
 
+## 🚀 Panduan Menjalankan Secara Lokal
+
 ## ✅ Prasyarat
 
 - [Node.js](https://nodejs.org/) **v20 atau lebih baru** (disarankan LTS)
@@ -83,10 +113,6 @@ Cek versi:
 node -v
 npm -v
 ```
-
----
-
-## 🚀 Panduan Menjalankan Secara Lokal
 
 ### 1. Clone repositori
 
@@ -153,26 +179,6 @@ npm run preview    # pratinjau hasil build
 | Perintah        | Fungsi                       |
 | --------------- | ---------------------------- |
 | `npm run dev`   | Menjalankan server development |
-
----
-
-## ☁️ Deploy ke Vercel
-
-Proyek ini sudah dikonfigurasi sebagai multi-service lewat `vercel.json`:
-
-1. Push repositori ke GitHub.
-2. Di [Vercel](https://vercel.com), pilih **Add New → Project**, lalu import repositori `MedBunny`.
-3. Biarkan konfigurasi mengikuti `vercel.json` (service `web` untuk frontend dan `api` untuk backend).
-4. Tambahkan **Environment Variables** bila dibutuhkan oleh backend (Settings → Environment Variables).
-5. Klik **Deploy**.
-
----
-
-## 🧪 Cara Mencoba Aplikasi (Reviewer)
-
-1. Buka [med-bunny.vercel.app](https://med-bunny.vercel.app).
-2. Masuk menggunakan **akun demo** di atas.
-3. Jelajahi fitur-fitur aplikasi.
 
 ---
 
