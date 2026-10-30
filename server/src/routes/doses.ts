@@ -10,7 +10,7 @@ import {
   DoseStatusSchema,
   errorResponse,
 } from '../lib/schemas.js'
-import { requireAuth, requireChildAccess } from '../middleware/auth.js'
+import { requireAuth, requireChildAccess, requireParentMode } from '../middleware/auth.js'
 import { AWAITING_WINDOW_MS } from '../services/dose-status.js'
 import { ensureDoseLogs, MAX_RANGE_DAYS } from '../services/dose-schedule.js'
 
@@ -38,8 +38,13 @@ const DoseQuerySchema = z.object({
     .openapi({ param: { name: 'q', in: 'query' }, example: 'Ibuprofen' }),
 })
 
-doseRoutes.use('/children/:childId/doses', requireAuth, requireChildAccess)
-doseRoutes.use('/doses/*', requireAuth)
+doseRoutes.use(
+  '/children/:childId/doses',
+  requireAuth,
+  requireParentMode,
+  requireChildAccess,
+)
+doseRoutes.use('/doses/*', requireAuth, requireParentMode)
 
 type DateTimeFilter = {
   gte?: Date

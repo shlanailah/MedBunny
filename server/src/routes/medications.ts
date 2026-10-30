@@ -8,7 +8,7 @@ import {
   MedicationInputSchema,
   MedicationSchema,
 } from '../lib/schemas.js'
-import { requireAuth, requireChildAccess } from '../middleware/auth.js'
+import { requireAuth, requireChildAccess, requireParentMode } from '../middleware/auth.js'
 
 export const medicationRoutes = createRouter()
 
@@ -35,8 +35,13 @@ const MedicationParamsSchema = z.object({
   id: z.uuid().openapi({ param: { name: 'id', in: 'path' } }),
 })
 
-medicationRoutes.use('/children/:childId/medications', requireAuth, requireChildAccess)
-medicationRoutes.use('/medications/*', requireAuth)
+medicationRoutes.use(
+  '/children/:childId/medications',
+  requireAuth,
+  requireParentMode,
+  requireChildAccess,
+)
+medicationRoutes.use('/medications/*', requireAuth, requireParentMode)
 
 const listRoute = createRoute({
   method: 'get',

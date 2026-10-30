@@ -5,7 +5,7 @@ import { prisma } from '../db.js'
 import { env } from '../env.js'
 import { apiError, isUuid, notFound } from '../lib/errors.js'
 import { SESSION_COOKIE } from '../lib/session.js'
-import type { AppEnv } from '../types.js'
+import type { AppEnv, SessionMode } from '../types.js'
 
 export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
   const token = getCookie(c, SESSION_COOKIE)
@@ -30,7 +30,48 @@ export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
     return apiError(c, 401, 'UNAUTHENTICATED', 'Akun tidak ditemukan. Silakan masuk lagi.')
   }
 
+  // Token lama (sebelum tahap 2) tidak punya mode; anggap Parent mode.
+  const mode: SessionMode = payload.mode === 'child' ? 'child' : 'parent'
+
+  if (mode === 'child') {
+    const childId = typeof payload.childId === 'string' ? payload.childId : ''
+    if (!isUuid(childId)) {
+      return apiError(c, 401, 'UNAUTHENTICATED', 'Sesi Kids mode tidak valid. Silakan masuk lagi.')
+    }
+
+    const child = await prisma.child.findFirst({
+      where: { id: childId, userId: user.id },
+    })
+    if (!child) {
+      return apiError(c, 401, 'UNAUTHENTICATED', 'Profil anak tidak ditemukan. Silakan masuk lagi.')
+    }
+
+    c.set('child', child)
+  }
+
   c.set('user', user)
+  c.set('sessionMode', mode)
+  await next()
+}
+
+export const requireParentMode: MiddlewareHandler<AppEnv> = async (c, next) => {
+  if (c.get('sessionMode') !== 'parent') {
+    return apiError(
+      c,
+      403,
+      'PARENT_MODE_REQUIRED',
+      'Fitur ini hanya bisa dibuka dari Parent mode.',
+    )
+  }
+
+  await next()
+}
+
+export const requireChildMode: MiddlewareHandler<AppEnv> = async (c, next) => {
+  if (c.get('sessionMode') !== 'child') {
+    return apiError(c, 403, 'CHILD_MODE_REQUIRED', 'Fitur ini hanya bisa dibuka dari Kids mode.')
+  }
+
   await next()
 }
 

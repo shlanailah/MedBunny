@@ -8,7 +8,9 @@ import { apiError, ApiError } from './lib/errors.js'
 import { createRouter } from './lib/openapi.js'
 import { authRoutes } from './routes/auth.js'
 import { doseRoutes } from './routes/doses.js'
+import { kidsRoutes } from './routes/kids.js'
 import { medicationRoutes } from './routes/medications.js'
+import { sessionRoutes } from './routes/session.js'
 import { starRoutes } from './routes/stars.js'
 
 const app = createRouter()
@@ -31,9 +33,11 @@ const healthRoute = createRoute({
 app.openapi(healthRoute, (c) => c.json({ ok: true }, 200))
 
 app.route('/api', authRoutes)
+app.route('/api', sessionRoutes)
 app.route('/api', medicationRoutes)
 app.route('/api', doseRoutes)
 app.route('/api', starRoutes)
+app.route('/api', kidsRoutes)
 
 app.doc('/api/openapi.json', {
   openapi: '3.0.0',
@@ -41,7 +45,7 @@ app.doc('/api/openapi.json', {
     title: 'MedBunny API',
     version: '1.0.0',
     description:
-      'API Tahap 1 MedBunny: autentikasi, jadwal obat, dosis, dan bintang. Foto dokumentasi tidak pernah dikirim ke server.',
+      'API MedBunny: autentikasi, jadwal obat, dosis, bintang, PIN, dan Kids mode. Foto dokumentasi tidak pernah dikirim ke server.',
   },
 })
 

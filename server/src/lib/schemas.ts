@@ -9,6 +9,13 @@ export const FrequencySchema = z.enum(['EVERY_DAY', 'SOME_DAYS', 'AS_NEEDED'])
 export const MealTimingSchema = z.enum(['BEFORE_MEAL', 'AFTER_MEAL', 'ANYTIME'])
 export const WeekdaySchema = z.enum(['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'])
 export const DoseStatusSchema = z.enum(['recorded', 'awaiting', 'missed', 'upcoming'])
+export const SessionModeSchema = z.enum(['parent', 'child'])
+export const GameSchema = z.enum(['GARDEN', 'STYLE', 'MATCH_UP', 'COLOR_HUNT'])
+export const GameIdSchema = z.enum(['garden', 'style', 'match-up', 'color-hunt'])
+export const PinSchema = z
+  .string()
+  .regex(/^\d{4}$/, 'PIN harus 4 digit angka')
+  .openapi({ example: '1234' })
 
 export const MedicationInputSchema = z
   .object({
@@ -55,6 +62,8 @@ export const SessionSchema = z
   .object({
     user: UserSchema,
     children: z.array(ChildSchema),
+    mode: SessionModeSchema,
+    childId: z.string().nullable(),
   })
   .openapi('Session')
 
@@ -85,6 +94,37 @@ export const DoseLogSchema = z
     status: DoseStatusSchema,
   })
   .openapi('DoseLog')
+
+export const StarsSchema = z
+  .object({
+    balance: z.number().int(),
+    earned: z.number().int(),
+  })
+  .openapi('Stars')
+
+export const KidsSettingsSchema = z
+  .object({
+    sessionMinutes: z.number().int(),
+    endReminder: z.boolean(),
+    reminderBeforeMinutes: z.number().int(),
+  })
+  .openapi('KidsModeSettings')
+
+export const KidsSessionSchema = z
+  .object({
+    endsAt: z.string(),
+    reminderAt: z.string().nullable(),
+  })
+  .openapi('KidsSession')
+
+export const KidsStateSchema = z
+  .object({
+    childName: z.string(),
+    bunny: z.enum(['sleeping', 'awake']),
+    starBalance: z.number().int(),
+    session: KidsSessionSchema.nullable(),
+  })
+  .openapi('KidsState')
 
 export const ErrorSchema = z
   .object({

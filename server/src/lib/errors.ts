@@ -19,6 +19,7 @@ export function apiError<S extends ContentfulStatusCode>(
   code: string,
   message: string,
   field?: string,
+  extra?: Record<string, unknown>,
 ) {
   return c.json(
     {
@@ -26,6 +27,7 @@ export function apiError<S extends ContentfulStatusCode>(
         code,
         message,
         ...(field ? { field } : {}),
+        ...(extra ?? {}),
       },
     },
     status,

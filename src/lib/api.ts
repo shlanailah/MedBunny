@@ -14,9 +14,13 @@ export type Child = {
   nickname: string | null
 }
 
+export type SessionMode = 'parent' | 'child'
+
 export type Session = {
   user: SessionUser
   children: Child[]
+  mode: SessionMode
+  childId: string | null
 }
 
 export type ApiMedication = {
@@ -85,6 +89,31 @@ export type ConfirmDoseResult = {
   starBalance: number
 }
 
+export type GameId = 'garden' | 'style' | 'match-up' | 'color-hunt'
+
+export type KidsSession = {
+  endsAt: string
+  reminderAt: string | null
+}
+
+export type KidsState = {
+  childName: string
+  bunny: 'sleeping' | 'awake'
+  starBalance: number
+  session: KidsSession | null
+}
+
+export type KidsSettings = {
+  sessionMinutes: number
+  endReminder: boolean
+  reminderBeforeMinutes: number
+}
+
+export type Stars = {
+  balance: number
+  earned: number
+}
+
 const FREQUENCY_TO_API: Record<string, ApiFrequency> = {
   'Every day': 'EVERY_DAY',
   'Some days': 'SOME_DAYS',
@@ -135,6 +164,7 @@ export class ApiError extends Error {
     public readonly code: string,
     message: string,
     public readonly field?: string,
+    public readonly details: Record<string, unknown> = {},
   ) {
     super(message)
     this.name = 'ApiError'
@@ -200,17 +230,26 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const data = await response.json().catch(() => null)
 
   if (!response.ok) {
-    const error = data?.error as { code?: string; message?: string; field?: string } | undefined
+    const error = data?.error as
+      | { code?: string; message?: string; field?: string; [key: string]: unknown }
+      | undefined
 
     if (response.status === 401 && !skipAuthRedirect) {
       window.dispatchEvent(new Event('medbunny:unauthorized'))
     }
 
+    if (response.status === 403 && error?.code === 'PARENT_MODE_REQUIRED') {
+      window.dispatchEvent(new Event('medbunny:parent-required'))
+    }
+
+    const { code, message, field, ...details } = error ?? {}
+
     throw new ApiError(
       response.status,
-      error?.code ?? 'REQUEST_FAILED',
-      error?.message ?? 'Terjadi kesalahan. Coba lagi sebentar.',
-      error?.field,
+      code ?? 'REQUEST_FAILED',
+      message ?? 'Terjadi kesalahan. Coba lagi sebentar.',
+      field,
+      details,
     )
   }
 
@@ -280,6 +319,52 @@ export const api = {
   },
 
   getStars(childId: string) {
-    return request<{ balance: number }>(`/children/${childId}/stars`)
+    return request<Stars>(`/children/${childId}/stars`)
+  },
+
+  switchToKids(childId: string) {
+    return request<{ mode: 'child'; childId: string; session: KidsSession }>('/session/mode', {
+      method: 'POST',
+      body: JSON.stringify({ mode: 'child', childId }),
+    })
+  },
+
+  switchToParent(pin: string) {
+    return request<{ mode: 'parent' }>('/session/mode', {
+      method: 'POST',
+      skipAuthRedirect: true,
+      body: JSON.stringify({ mode: 'parent', pin }),
+    })
+  },
+
+  setPin(currentPassword: string, pin: string) {
+    return request<void>('/me/pin', {
+      method: 'PUT',
+      skipAuthRedirect: true,
+      body: JSON.stringify({ currentPassword, pin }),
+    })
+  },
+
+  getKidsState() {
+    return request<KidsState>('/kids/state')
+  },
+
+  startGame(game: GameId) {
+    return request<{ starBalance: number }>(`/kids/games/${game}/start`, { method: 'POST' })
+  },
+
+  getKidsSettings(childId: string) {
+    return request<KidsSettings>(`/children/${childId}/kids-settings`)
+  },
+
+  updateKidsSettings(childId: string, input: KidsSettings) {
+    return request<KidsSettings>(`/children/${childId}/kids-settings`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    })
+  },
+
+  endPlaySession(childId: string) {
+    return request<void>(`/children/${childId}/play-sessions/current/end`, { method: 'POST' })
   },
 }

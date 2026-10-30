@@ -1,5 +1,5 @@
-// MedBunny — Tahap 1
-// Skema mengikuti docs/backend-guide.md §1.2.
+// MedBunny — Tahap 1 & 2
+// Skema mengikuti docs/backend-guide.md §1.2 dan §2.3.
 
 generator client {
   provider     = "prisma-client"
@@ -35,17 +35,29 @@ enum Weekday {
 
 enum StarReason {
   DOSE_CONFIRMED
+  WELCOME_BONUS
+  GAME_PLAY
+}
+
+enum Game {
+  GARDEN
+  STYLE
+  MATCH_UP
+  COLOR_HUNT
 }
 
 model User {
-  id            String    @id @default(uuid()) @db.Uuid
-  name          String    @db.VarChar(100)
-  email         String    @unique @db.VarChar(254)
-  passwordHash  String
-  timezone      String    @default("Asia/Jakarta") @db.VarChar(64)
-  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
-  children      Child[]
-  confirmations DoseLog[]
+  id             String    @id @default(uuid()) @db.Uuid
+  name           String    @db.VarChar(100)
+  email          String    @unique @db.VarChar(254)
+  passwordHash   String
+  timezone       String    @default("Asia/Jakarta") @db.VarChar(64)
+  pinHash        String?
+  pinFailedCount Int       @default(0)
+  pinLockedUntil DateTime? @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  children       Child[]
+  confirmations  DoseLog[]
 
   @@map("users")
 }
@@ -58,6 +70,8 @@ model Child {
   createdAt        DateTime          @default(now()) @db.Timestamptz(3)
   medications      Medication[]
   starTransactions StarTransaction[]
+  kidsSettings     KidsModeSettings?
+  playSessions     PlaySession[]
 
   @@index([userId])
   @@map("children")
@@ -122,12 +136,35 @@ model StarTransaction {
   id        String     @id @default(uuid()) @db.Uuid
   childId   String     @db.Uuid
   child     Child      @relation(fields: [childId], references: [id], onDelete: Cascade)
-  amount    Int        // positif = dapat, negatif = dipakai (tahap 2)
+  amount    Int // positif = dapat, negatif = dipakai (tahap 2)
   reason    StarReason
+  game      Game? // hanya diisi untuk GAME_PLAY
   doseLogId String?    @unique @db.Uuid // §5.4: bintang dari dosis yang sama tidak bisa didapat dua kali
   doseLog   DoseLog?   @relation(fields: [doseLogId], references: [id], onDelete: SetNull)
   createdAt DateTime   @default(now()) @db.Timestamptz(3)
 
   @@index([childId])
   @@map("star_transactions")
+}
+
+model KidsModeSettings {
+  childId               String  @id @db.Uuid
+  child                 Child   @relation(fields: [childId], references: [id], onDelete: Cascade)
+  sessionMinutes        Int     @default(15)
+  endReminder           Boolean @default(true)
+  reminderBeforeMinutes Int     @default(2)
+
+  @@map("kids_mode_settings")
+}
+
+model PlaySession {
+  id        String    @id @default(uuid()) @db.Uuid
+  childId   String    @db.Uuid
+  child     Child     @relation(fields: [childId], references: [id], onDelete: Cascade)
+  startedAt DateTime  @default(now()) @db.Timestamptz(3)
+  endsAt    DateTime  @db.Timestamptz(3)
+  endedAt   DateTime? @db.Timestamptz(3)
+
+  @@index([childId])
+  @@map("play_sessions")
 }

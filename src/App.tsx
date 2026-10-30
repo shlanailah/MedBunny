@@ -6,9 +6,13 @@ import {
   type Child,
   type DoseLog,
   type DoseStatus,
+  type GameId,
+  type KidsSettings,
+  type KidsState,
   type Medication,
   type MedicationDraft,
   type Session,
+  type SessionMode,
   type SessionUser,
 } from './lib/api'
 
@@ -32,6 +36,7 @@ function Icon({ name, size = 22 }: { name: string; size?: number }) {
     timer: <><circle cx="12" cy="14" r="7" /><path d="M10 3h4m-2 7v4" /></>,
     trash: <><path d="M4 7h16M10 11v6m4-6v6M6 7l1 13h10l1-13M9 7V4h6v3" /></>,
     logout: <><path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 17l5-5-5-5M15 12H3" /></>,
+    lock: <><rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></>,
     close: <path d="M6 6l12 12M18 6 6 18" />,
   }
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name] || paths.sun}</svg>
@@ -72,6 +77,20 @@ function doseBucket(value: string) {
 
 function errorMessage(error: unknown) {
   return error instanceof ApiError ? error.message : 'Terjadi kesalahan. Coba lagi sebentar.'
+}
+
+function shuffle<T>(items: readonly T[]): T[] {
+  const result = [...items]
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[result[i], result[j]] = [result[j], result[i]]
+  }
+  return result
+}
+
+function lockMinutesLeft(lockedUntil: string | null, now: Date) {
+  if (!lockedUntil) return 0
+  return Math.max(0, Math.ceil((new Date(lockedUntil).getTime() - now.getTime()) / 60000))
 }
 
 function AddMedication({ onBack, initial, onSave }: { onBack: () => void; initial?: Medication; onSave: (medication: MedicationDraft) => Promise<void> }) {
@@ -170,7 +189,7 @@ function MedicationHistory({ childId }: { childId: string }) {
   useEffect(() => {
     let cancelled = false
     api.getStars(childId)
-      .then(result => { if (!cancelled) setBalance(result.balance) })
+      .then(result => { if (!cancelled) setBalance(result.earned) })
       .catch(() => {})
     return () => { cancelled = true }
   }, [childId, reloadKey])
@@ -283,20 +302,166 @@ function MedicationSchedule({ childId, onChanged }: { childId: string; onChanged
 }
 
 const profileSettings = [
-  { icon: 'child', title: 'Child Profile', description: 'Nickname and essential basic information', color: 'yellow' },
-  { icon: 'bell', title: 'Notifications', description: 'Reminder and notification preferences', color: 'blue' },
-  { icon: 'shield', title: 'Security', description: 'PIN or authentication for Parent Mode', color: 'sage' },
-  { icon: 'timer', title: 'Kids Mode Settings', description: 'Session length and end-of-play reminders', color: 'lavender' },
-  { icon: 'trash', title: 'Data & Account', description: 'Export or delete data with parent confirmation', color: 'coral' },
-]
+  { key: 'child', icon: 'child', title: 'Child Profile', description: 'Nickname and essential basic information', color: 'yellow' },
+  { key: 'notifications', icon: 'bell', title: 'Notifications', description: 'Reminder and notification preferences', color: 'blue' },
+  { key: 'security', icon: 'shield', title: 'Security', description: 'PIN or authentication for Parent Mode', color: 'sage' },
+  { key: 'kids', icon: 'timer', title: 'Kids Mode Settings', description: 'Session length and end-of-play reminders', color: 'lavender' },
+  { key: 'data', icon: 'trash', title: 'Data & Account', description: 'Export or delete data with parent confirmation', color: 'coral' },
+] as const
 
-function ProfilePage({ user, child, onBack, onLogout }: { user: SessionUser; child?: Child; onBack: () => void; onLogout: () => void }) {
+type ProfileSection = 'security' | 'kids' | null
+
+function ProfilePage({ user, child, onBack, onLogout, initialSection, notice, onPinSaved }: {
+  user: SessionUser
+  child?: Child
+  onBack: () => void
+  onLogout: () => void
+  initialSection?: ProfileSection
+  notice?: string
+  onPinSaved?: () => void
+}) {
+  const [section, setSection] = useState<ProfileSection>(initialSection ?? null)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPin, setNewPin] = useState('')
+  const [confirmPin, setConfirmPin] = useState('')
+  const [securityBusy, setSecurityBusy] = useState(false)
+  const [securityError, setSecurityError] = useState('')
+  const [securityMessage, setSecurityMessage] = useState('')
+  const [settings, setSettings] = useState<KidsSettings | null>(null)
+  const [settingsBusy, setSettingsBusy] = useState(false)
+  const [settingsError, setSettingsError] = useState('')
+  const [settingsMessage, setSettingsMessage] = useState('')
+
+  useEffect(() => {
+    setSection(initialSection ?? null)
+  }, [initialSection])
+
+  useEffect(() => {
+    if (section !== 'kids' || !child) return
+    let cancelled = false
+    setSettingsError('')
+    api.getKidsSettings(child.id)
+      .then(value => { if (!cancelled) setSettings(value) })
+      .catch(error => { if (!cancelled) setSettingsError(errorMessage(error)) })
+    return () => { cancelled = true }
+  }, [section, child?.id])
+
+  async function savePin(event: FormEvent) {
+    event.preventDefault()
+    setSecurityError('')
+    setSecurityMessage('')
+
+    if (newPin.length !== 4) {
+      setSecurityError('PIN harus 4 digit angka.')
+      return
+    }
+    if (newPin !== confirmPin) {
+      setSecurityError('Konfirmasi PIN tidak cocok.')
+      return
+    }
+
+    setSecurityBusy(true)
+    try {
+      await api.setPin(currentPassword, newPin)
+      setSecurityMessage('PIN berhasil disimpan. Sekarang kamu bisa masuk Kids mode.')
+      onPinSaved?.()
+      setCurrentPassword('')
+      setNewPin('')
+      setConfirmPin('')
+    } catch (error) {
+      setSecurityError(errorMessage(error))
+    } finally {
+      setSecurityBusy(false)
+    }
+  }
+
+  async function saveSettings(event: FormEvent) {
+    event.preventDefault()
+    if (!child || !settings) return
+
+    setSettingsBusy(true)
+    setSettingsError('')
+    setSettingsMessage('')
+    try {
+      const updated = await api.updateKidsSettings(child.id, settings)
+      setSettings(updated)
+      setSettingsMessage('Pengaturan Kids mode disimpan.')
+    } catch (error) {
+      setSettingsError(errorMessage(error))
+    } finally {
+      setSettingsBusy(false)
+    }
+  }
+
+  async function endCurrentSession() {
+    if (!child) return
+
+    setSettingsBusy(true)
+    setSettingsError('')
+    setSettingsMessage('')
+    try {
+      await api.endPlaySession(child.id)
+      setSettingsMessage('Sesi bermain yang aktif sudah diakhiri.')
+    } catch (error) {
+      setSettingsError(errorMessage(error))
+    } finally {
+      setSettingsBusy(false)
+    }
+  }
+
   return <section className="profile-page" aria-labelledby="profile-title">
     <div className="add-page-title"><button className="back-medication" onClick={onBack} aria-label="Back"><Icon name="chevron" /></button><div><div className="eyebrow">YOUR FAMILY, YOUR WAY</div><h1 id="profile-title">Profile</h1></div></div>
     <div className="profile-card">
       <img className="peeking-bunny" src="/assets/bunny-peeking.png" alt="" />
       <div className="profile-summary"><span className="profile-photo"><Icon name="user" size={34} /></span><div><h2>{user.name}</h2><p>{user.email}</p>{child?.nickname && <p>Child nickname: {child.nickname}</p>}</div><span className="profile-edit" aria-hidden="true"><Icon name="edit" size={19} /></span></div>
-      <ul className="profile-settings">{profileSettings.map(item => <li className="profile-setting" key={item.title}><span className={`profile-setting-icon ${item.color}`}><Icon name={item.icon} size={21} /></span><div><h3>{item.title}</h3><p>{item.description}</p></div><Icon name="chevron" size={17} /></li>)}</ul>
+      {notice && <p className="profile-notice" role="status">{notice}</p>}
+      <ul className="profile-settings">
+        {profileSettings.map(item => {
+          const interactive = item.key === 'security' || item.key === 'kids'
+          const active = section === item.key
+          return <li className={`profile-setting${active ? ' is-active' : ''}`} key={item.key}>
+            <button
+              type="button"
+              className="profile-setting-button"
+              aria-expanded={interactive ? active : undefined}
+              disabled={!interactive}
+              onClick={() => {
+                if (!interactive) return
+                setSection(current => current === item.key ? null : item.key)
+              }}
+            >
+              <span className={`profile-setting-icon ${item.color}`}><Icon name={item.icon} size={21} /></span>
+              <span className="profile-setting-copy"><strong>{item.title}</strong><span>{item.description}</span></span>
+              <Icon name={active ? 'down' : 'chevron'} size={17} />
+            </button>
+            {active && item.key === 'security' && <form className="profile-panel" onSubmit={event => void savePin(event)}>
+              <p className="profile-panel-hint">PIN 4 digit dipakai untuk kembali dari Kids mode ke Parent mode.</p>
+              <label>Password akun<input type="password" autoComplete="current-password" required value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} /></label>
+              <div className="profile-panel-row">
+                <label>PIN baru<input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={4} required value={newPin} onChange={event => setNewPin(event.target.value.replace(/\D/g, '').slice(0, 4))} /></label>
+                <label>Ulangi PIN<input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={4} required value={confirmPin} onChange={event => setConfirmPin(event.target.value.replace(/\D/g, '').slice(0, 4))} /></label>
+              </div>
+              {securityError && <p className="proof-error" role="alert">{securityError}</p>}
+              {securityMessage && <p className="profile-success" role="status">{securityMessage}</p>}
+              <button className="profile-save" type="submit" disabled={securityBusy}>{securityBusy ? 'Menyimpan…' : 'Simpan PIN'}</button>
+            </form>}
+            {active && item.key === 'kids' && <form className="profile-panel" onSubmit={event => void saveSettings(event)}>
+              {!settings && !settingsError && <p className="profile-panel-hint">Memuat pengaturan…</p>}
+              {settingsError && <p className="proof-error" role="alert">{settingsError}</p>}
+              {settings && <>
+                <label>Panjang sesi bermain (menit)<input type="number" min={5} max={30} required value={settings.sessionMinutes} onChange={event => setSettings({ ...settings, sessionMinutes: Number(event.target.value) })} /></label>
+                <label className="profile-check"><input type="checkbox" checked={settings.endReminder} onChange={event => setSettings({ ...settings, endReminder: event.target.checked })} />Ingatkan sebelum sesi berakhir</label>
+                <label>Pengingat sebelum berakhir (menit)<input type="number" min={1} max={30} required value={settings.reminderBeforeMinutes} onChange={event => setSettings({ ...settings, reminderBeforeMinutes: Number(event.target.value) })} /></label>
+                {settingsMessage && <p className="profile-success" role="status">{settingsMessage}</p>}
+                <div className="profile-panel-actions">
+                  <button className="profile-save" type="submit" disabled={settingsBusy}>{settingsBusy ? 'Menyimpan…' : 'Simpan pengaturan'}</button>
+                  <button className="profile-secondary" type="button" disabled={settingsBusy} onClick={() => void endCurrentSession()}>Akhiri sesi bermain</button>
+                </div>
+              </>}
+            </form>}
+          </li>
+        })}
+      </ul>
     </div>
     <button className="profile-logout" onClick={onLogout}><Icon name="logout" size={18} />Logout</button>
   </section>
@@ -447,7 +612,7 @@ const GARDEN_FLOWERS: { id: GardenFlower; label: string; flowerImage: string; pl
   { id: 'blue', label: 'Blue flower', flowerImage: '/assets/bunga biru.png', plotImage: '/assets/garden-blue.png' },
 ]
 
-function KidsGarden({ onBack }: { onBack: () => void }) {
+function KidsGarden({ onExit }: { onExit: (finished: boolean) => void }) {
   const [plots, setPlots] = useState<(GardenFlower | null)[]>(Array(16).fill(null))
   const [selectedFlower, setSelectedFlower] = useState<GardenFlower>('pink')
   const [dragging, setDragging] = useState<{ flower: GardenFlower; x: number; y: number } | null>(null)
@@ -481,7 +646,7 @@ function KidsGarden({ onBack }: { onBack: () => void }) {
     onPointerUp={finishDrag}
     onPointerCancel={() => setDragging(null)}
   >
-    <button className="garden-back" onClick={onBack} aria-label="Back to games"><Icon name="chevron" size={20} /></button>
+    <button className="garden-back" onClick={() => onExit(false)} aria-label="Back to games"><Icon name="chevron" size={20} /></button>
     <div className="garden-heading">
       <h1 id="garden-title">Bunny’s Garden</h1>
       <p>Drag a flower to a garden patch</p>
@@ -542,26 +707,32 @@ const MATCH_UP_CARDS = [
   { id: 'star-two', pair: 'star', label: 'Happy star', image: '/assets/kartu star.png' },
 ]
 
-function KidsMatchUp({ onBack }: { onBack: () => void }) {
+function KidsMatchUp({ onExit, onPlayAgain, canPlayAgain }: {
+  onExit: (finished: boolean) => void
+  onPlayAgain: () => void
+  canPlayAgain: boolean
+}) {
+  const [cards] = useState(() => shuffle(MATCH_UP_CARDS))
   const [flipped, setFlipped] = useState<number[]>([])
   const [matched, setMatched] = useState<string[]>([])
   const [checking, setChecking] = useState(false)
   const checkTimer = useRef<number | null>(null)
-  const complete = matched.length === 3
+  const pairCount = new Set(cards.map(card => card.pair)).size
+  const complete = matched.length === pairCount
 
   useEffect(() => () => {
     if (checkTimer.current) window.clearTimeout(checkTimer.current)
   }, [])
 
   function chooseCard(index: number) {
-    const card = MATCH_UP_CARDS[index]
+    const card = cards[index]
     if (!card || checking || flipped.includes(index) || matched.includes(card.pair)) return
 
     const nextFlipped = [...flipped, index]
     setFlipped(nextFlipped)
     if (nextFlipped.length < 2) return
 
-    const firstCard = MATCH_UP_CARDS[nextFlipped[0]]
+    const firstCard = cards[nextFlipped[0]]
     const isMatch = firstCard.pair === card.pair
     setChecking(true)
     checkTimer.current = window.setTimeout(() => {
@@ -571,21 +742,14 @@ function KidsMatchUp({ onBack }: { onBack: () => void }) {
     }, isMatch ? 450 : 850)
   }
 
-  function restartGame() {
-    if (checkTimer.current) window.clearTimeout(checkTimer.current)
-    setFlipped([])
-    setMatched([])
-    setChecking(false)
-  }
-
   return <section className="kids-match-up" aria-labelledby="match-up-title">
-    <button className="match-up-back" onClick={onBack} aria-label="Back to games"><Icon name="chevron" size={20} /></button>
+    <button className="match-up-back" onClick={() => onExit(false)} aria-label="Back to games"><Icon name="chevron" size={20} /></button>
     <div className="match-up-heading">
       <h1 id="match-up-title">Bunny’s Match-Up</h1>
       <p>Click 2 cards with the same image</p>
     </div>
     <div className="match-up-grid" aria-label="Memory matching cards">
-      {MATCH_UP_CARDS.map((card, index) => {
+      {cards.map((card, index) => {
         const isRevealed = flipped.includes(index) || matched.includes(card.pair)
         const isMatched = matched.includes(card.pair)
         return <button
@@ -603,41 +767,104 @@ function KidsMatchUp({ onBack }: { onBack: () => void }) {
     {complete && <div className="match-up-complete" role="status">
       <span><Icon name="star" size={19} /></span>
       <strong>All pairs found!</strong>
-      <button onClick={restartGame}>Play again</button>
+      <div className="kids-complete-actions">
+        {canPlayAgain && <button onClick={onPlayAgain}>Play again</button>}
+        <button onClick={() => onExit(true)}>Kembali</button>
+      </div>
     </div>}
   </section>
 }
 
-const DRESS_UP_CATEGORIES = [
+type DressSlot = 'head' | 'eyes' | 'neck'
+
+const DRESS_UP_CATEGORIES: {
+  title: string
+  slot: DressSlot
+  items: { label: string; image: string; overlay: string }[]
+}[] = [
   {
     title: 'Head',
+    slot: 'head',
     items: [
-      { label: 'Baseball cap', image: '/assets/topi biasa.png' },
-      { label: 'Sun hat', image: '/assets/topi.png' },
-      { label: 'Crown', image: '/assets/mahkota.png' },
+      { label: 'Baseball cap', image: '/assets/topi biasa.png', overlay: '/assets/topi overlay.png' },
+      { label: 'Sun hat', image: '/assets/topi.png', overlay: '/assets/topi bundar overlay.png' },
+      { label: 'Crown', image: '/assets/mahkota.png', overlay: '/assets/mahkota overlay.png' },
     ],
   },
   {
     title: 'Eyes',
+    slot: 'eyes',
     items: [
-      { label: 'Classic glasses', image: '/assets/kacamata.png' },
-      { label: 'Round glasses', image: '/assets/kacamata bulat.png' },
-      { label: 'Sunglasses', image: '/assets/kacamata hitam.png' },
+      { label: 'Classic glasses', image: '/assets/kacamata.png', overlay: '/assets/kacamata coklat overlay.png' },
+      { label: 'Round glasses', image: '/assets/kacamata bulat.png', overlay: '/assets/kacamata bulat overlay.png' },
+      { label: 'Sunglasses', image: '/assets/kacamata hitam.png', overlay: '/assets/kacamata hitam overlay.png' },
     ],
   },
   {
     title: 'Neck',
+    slot: 'neck',
     items: [
-      { label: 'Red bow', image: '/assets/dasi.png' },
-      { label: 'Flower necklace', image: '/assets/kalung.png' },
-      { label: 'MedBunny scarf', image: '/assets/scarf.png' },
+      { label: 'Red bow', image: '/assets/dasi.png', overlay: '/assets/dasi overlay.png' },
+      { label: 'Flower necklace', image: '/assets/kalung.png', overlay: '/assets/kalung overlay.png' },
+      { label: 'MedBunny scarf', image: '/assets/scarf.png', overlay: '/assets/scarf overlay.png' },
     ],
   },
 ]
 
-function KidsDressUp({ onBack }: { onBack: () => void }) {
+const EMPTY_STYLE: Record<DressSlot, string | null> = { head: null, eyes: null, neck: null }
+
+function KidsDressUp({ onExit, onPlayAgain, canPlayAgain }: {
+  onExit: (finished: boolean) => void
+  onPlayAgain: () => void
+  canPlayAgain: boolean
+}) {
+  const [style, setStyle] = useState<Record<DressSlot, string | null>>(EMPTY_STYLE)
+  const [finished, setFinished] = useState(false)
+
+  useEffect(() => {
+    // Muat overlay di latar belakang supaya aksesori langsung muncul pada ketukan pertama.
+    DRESS_UP_CATEGORIES.forEach(category => category.items.forEach(item => {
+      const image = new Image()
+      image.src = item.overlay
+    }))
+  }, [])
+
+  function toggle(slot: DressSlot, label: string) {
+    setStyle(current => ({
+      ...current,
+      [slot]: current[slot] === label ? null : label,
+    }))
+  }
+
+  function overlayOf(label: string | null) {
+    if (!label) return null
+    for (const category of DRESS_UP_CATEGORIES) {
+      const item = category.items.find(candidate => candidate.label === label)
+      if (item) return item.overlay
+    }
+    return null
+  }
+
+  const selected = DRESS_UP_CATEGORIES.flatMap(category =>
+    category.items
+      .filter(item => style[category.slot] === item.label)
+      .map(item => item.label),
+  )
+  const hasAccessory = selected.length > 0
+  const bunnyAlt = hasAccessory
+    ? `Bunny memakai ${selected.join(', ')}`
+    : 'MedBunny siap berdandan'
+
+  const bunnyFrame = <div className="dress-up-frame">
+    <img src="/assets/bunny tegak.png" alt={bunnyAlt} />
+    {(['neck', 'eyes', 'head'] as const).map(slot => {
+      const overlay = overlayOf(style[slot])
+      return overlay ? <img key={slot} className="dress-up-layer" src={overlay} alt="" /> : null
+    })}
+  </div>
+
   return <section className="kids-dress-up" aria-labelledby="dress-up-title">
-    <button className="dress-up-back" onClick={onBack} aria-label="Back to games"><Icon name="chevron" size={20} /></button>
+    <button className="dress-up-back" onClick={() => onExit(finished)} aria-label="Back to games"><Icon name="chevron" size={20} /></button>
     <div className="dress-up-heading">
       <h1 id="dress-up-title">Bunny’s Style</h1>
       <p>Choose your accessories</p>
@@ -645,21 +872,42 @@ function KidsDressUp({ onBack }: { onBack: () => void }) {
     <div className="dress-up-stage">
       <div className="dress-up-bunny-wrap">
         <span className="dress-up-spark spark-left" aria-hidden="true">✦</span>
-        <img src="/assets/bunny tegak.png" alt="MedBunny ready to dress up" />
+        {bunnyFrame}
         <span className="dress-up-spark spark-right" aria-hidden="true">✦</span>
       </div>
-      <div className="accessory-panel" aria-label="Accessory choices coming soon">
+      <div className="accessory-panel" aria-label="Accessory choices">
         {DRESS_UP_CATEGORIES.map(category => <section className="accessory-column" key={category.title} aria-labelledby={`accessory-${category.title.toLowerCase()}`}>
           <h2 id={`accessory-${category.title.toLowerCase()}`}>{category.title}</h2>
           <div className="accessory-list">
-            {category.items.map(item => <div className="accessory-item" key={item.label}>
-              <img src={item.image} alt={item.label} />
-            </div>)}
+            {category.items.map(item => <button
+              type="button"
+              className={`accessory-item${style[category.slot] === item.label ? ' selected' : ''}`}
+              key={item.label}
+              aria-pressed={style[category.slot] === item.label}
+              aria-label={item.label}
+              onClick={() => toggle(category.slot, item.label)}
+            >
+              <img src={item.image} alt="" />
+            </button>)}
           </div>
         </section>)}
       </div>
     </div>
-    <span className="dress-up-coming-soon">Bunny’s Style play is coming soon</span>
+    <div className="dress-up-actions">
+      <button className="dress-up-reset" type="button" disabled={!hasAccessory} onClick={() => setStyle(EMPTY_STYLE)}>Reset</button>
+      <button className="dress-up-done" type="button" onClick={() => setFinished(true)}>Selesai</button>
+    </div>
+    {finished && <div className="dress-up-finish" role="dialog" aria-labelledby="dress-up-finish-title" aria-modal="true">
+      <div className="dress-up-finish-card">
+        <span className="kids-kicker">WHAT A LOOK!</span>
+        <h2 id="dress-up-finish-title">Bunny jadi keren!</h2>
+        <div className="dress-up-bunny-wrap">{bunnyFrame}</div>
+        <div className="kids-complete-actions">
+          {canPlayAgain && <button onClick={onPlayAgain}>Play again</button>}
+          <button onClick={() => onExit(true)}>Kembali</button>
+        </div>
+      </div>
+    </div>}
   </section>
 }
 
@@ -682,7 +930,11 @@ const COLOR_HUNT_FLOWERS: { id: string; color: HuntColor; image: string; positio
   { id: 'purple-tall', color: 'purple', image: '/assets/color-hunt-purple-flower.png', position: 'flower-purple-tall' },
 ]
 
-function KidsColorHunt({ onBack }: { onBack: () => void }) {
+function KidsColorHunt({ onExit, onPlayAgain, canPlayAgain }: {
+  onExit: (finished: boolean) => void
+  onPlayAgain: () => void
+  canPlayAgain: boolean
+}) {
   const [targetIndex, setTargetIndex] = useState(0)
   const [feedback, setFeedback] = useState<{ flowerId: string; type: 'correct' | 'wrong' } | null>(null)
   const [locked, setLocked] = useState(false)
@@ -711,16 +963,8 @@ function KidsColorHunt({ onBack }: { onBack: () => void }) {
     }, isCorrect ? 850 : 520)
   }
 
-  function restartHunt() {
-    if (feedbackTimer.current) window.clearTimeout(feedbackTimer.current)
-    setTargetIndex(0)
-    setFeedback(null)
-    setLocked(false)
-    setComplete(false)
-  }
-
   return <section className="kids-color-hunt" aria-labelledby="color-hunt-title">
-    <button className="color-hunt-back" onClick={onBack} aria-label="Back to games"><Icon name="chevron" size={20} /></button>
+    <button className="color-hunt-back" onClick={() => onExit(false)} aria-label="Back to games"><Icon name="chevron" size={20} /></button>
     <div className="color-hunt-heading">
       <h1 id="color-hunt-title">Bunny’s Color Hunt</h1>
       <p>Choose flowers with the same color as the box</p>
@@ -750,25 +994,41 @@ function KidsColorHunt({ onBack }: { onBack: () => void }) {
     {complete && <div className="color-hunt-complete" role="status">
       <span><Icon name="star" size={20} /></span>
       <div><strong>Color hunt complete!</strong><p>You found every color.</p></div>
-      <button onClick={restartHunt}>Play again</button>
+      <div className="kids-complete-actions">
+        {canPlayAgain && <button onClick={onPlayAgain}>Play again</button>}
+        <button onClick={() => onExit(true)}>Kembali</button>
+      </div>
     </div>}
   </section>
 }
 
-function KidsDashboard({ name, balance, onOpenGarden, onOpenMatchUp, onOpenDressUp, onOpenColorHunt }: { name: string; balance: number; onOpenGarden: () => void; onOpenMatchUp: () => void; onOpenDressUp: () => void; onOpenColorHunt: () => void }) {
-  const games = [
-    { title: 'Bunny’s Garden', description: 'Grow a happy little garden', image: '/assets/schedule-bunny.png', tone: 'garden' },
-    { title: 'Bunny’s Style', description: 'Pick a cute accessories for Bunny', image: '/assets/kids-dress-up.png', tone: 'dress-up' },
-    { title: 'Bunny’s Match-Up', description: 'Find all the matching pairs', image: '/assets/kids-match-up.png', tone: 'match-up' },
-    { title: 'Bunny’s Color Hunt', description: 'Spot colors in the garden', image: '/assets/kids-color-hunt.png', tone: 'color-hunt' },
-  ]
+const KIDS_GAMES: { id: GameId; title: string; description: string; image: string; tone: string }[] = [
+  { id: 'garden', title: 'Bunny’s Garden', description: 'Grow a happy little garden', image: '/assets/schedule-bunny.png', tone: 'garden' },
+  { id: 'style', title: 'Bunny’s Style', description: 'Pick cute accessories for Bunny', image: '/assets/kids-dress-up.png', tone: 'dress-up' },
+  { id: 'match-up', title: 'Bunny’s Match-Up', description: 'Find all the matching pairs', image: '/assets/kids-match-up.png', tone: 'match-up' },
+  { id: 'color-hunt', title: 'Bunny’s Color Hunt', description: 'Spot colors in the garden', image: '/assets/kids-color-hunt.png', tone: 'color-hunt' },
+]
+
+function KidsDashboard({ kidsState, onPlay, message }: {
+  kidsState: KidsState
+  onPlay: (game: GameId) => void
+  message?: string
+}) {
+  const sessionExpired = !kidsState.session || new Date(kidsState.session.endsAt).getTime() <= Date.now()
+  const noStars = kidsState.starBalance <= 0
+  const canPlay = !sessionExpired && !noStars
+  const bunnyMessage = message || (sessionExpired
+    ? 'Waktunya istirahat dulu!'
+    : noStars
+      ? 'Bintang baru datang setelah jadwal obat berikutnya.'
+      : null)
 
   return <section className="kids-dashboard" aria-labelledby="kids-title">
     <div className="kids-top-grid">
       <div className="kids-welcome-card">
         <div>
           <span className="kids-kicker">LET’S PLAY TOGETHER</span>
-          <h1 id="kids-title">Hi, {name}!</h1>
+          <h1 id="kids-title">Hi, {kidsState.childName}!</h1>
           <p>What do you want to play?</p>
         </div>
         <img src="/assets/bunny-peeking.png" alt="MedBunny popping in to say hello" />
@@ -776,11 +1036,16 @@ function KidsDashboard({ name, balance, onOpenGarden, onOpenMatchUp, onOpenDress
         <span className="kids-spark kids-spark-two" aria-hidden="true">✦</span>
       </div>
 
-      <div className="kids-stars-card" aria-label={`${balance} stars collected`}>
+      <div className="kids-stars-card" aria-label={`${kidsState.starBalance} stars to play`}>
         <img src="/assets/happy-star.png" alt="" />
-        <div><strong>{balance}</strong><span>stars collected</span></div>
+        <div><strong>{kidsState.starBalance}</strong><span>stars to play</span></div>
       </div>
     </div>
+
+    {bunnyMessage && <div className={`kids-bunny-note${sessionExpired ? ' rest' : ''}`} role="status">
+      <img src={kidsState.bunny === 'sleeping' ? '/assets/bunny-sleeping.png' : '/assets/bunny-peeking.png'} alt="" />
+      <p>{bunnyMessage}</p>
+    </div>}
 
     <div className="kids-games-heading">
       <div>
@@ -791,13 +1056,23 @@ function KidsDashboard({ name, balance, onOpenGarden, onOpenMatchUp, onOpenDress
     </div>
 
     <div className="kids-games-grid">
-      {games.map(game => <button className={`kids-game-card ${game.tone}`} key={game.title} onClick={game.tone === 'garden' ? onOpenGarden : game.tone === 'match-up' ? onOpenMatchUp : game.tone === 'dress-up' ? onOpenDressUp : onOpenColorHunt}>
+      {KIDS_GAMES.map(game => <button
+        className={`kids-game-card ${game.tone}${canPlay ? '' : ' is-locked'}`}
+        key={game.id}
+        onClick={() => onPlay(game.id)}
+        disabled={!canPlay}
+        aria-disabled={!canPlay}
+      >
         <span className="kids-game-decor" aria-hidden="true">✦</span>
         <img src={game.image} alt="" />
         <div>
           <h3>{game.title}</h3>
           <p>{game.description}</p>
-          <span className="kids-play-label">Play now <Icon name="chevron" size={15} /></span>
+          <span className="kids-play-label">{canPlay
+            ? <>1 ⭐ <span className="kids-play-note">to play</span></>
+            : sessionExpired
+              ? <><Icon name="timer" size={14} />Rest time</>
+              : <><Icon name="lock" size={14} />Need a star</>}</span>
         </div>
       </button>)}
     </div>
@@ -810,11 +1085,14 @@ export default function App() {
   const [checkingSession, setCheckingSession] = useState(true)
   const [page, setPage] = useState('Home')
   const [previousPage, setPreviousPage] = useState('Home')
-  const [mode, setMode] = useState('Parent mode')
-  const [kidsScreen, setKidsScreen] = useState<'dashboard' | 'garden' | 'match-up' | 'dress-up' | 'color-hunt'>('dashboard')
+  const [mode, setMode] = useState<SessionMode>('parent')
+  const [kidsScreen, setKidsScreen] = useState<'dashboard' | GameId>('dashboard')
   const [modeMenuOpen, setModeMenuOpen] = useState(false)
   const [pinOpen, setPinOpen] = useState(false)
   const [pin, setPin] = useState('')
+  const [pinError, setPinError] = useState('')
+  const [pinLockedUntil, setPinLockedUntil] = useState<string | null>(null)
+  const [pinBusy, setPinBusy] = useState(false)
   const [now, setNow] = useState(new Date())
   const [proofOpen, setProofOpen] = useState(false)
   const [proof, setProof] = useState('')
@@ -827,8 +1105,20 @@ export default function App() {
   const [homeData, setHomeData] = useState<{ weekDoses: DoseLog[]; balance: number }>({ weekDoses: [], balance: 0 })
   const [homeLoading, setHomeLoading] = useState(true)
   const [homeError, setHomeError] = useState('')
+  const [kidsState, setKidsState] = useState<KidsState | null>(null)
+  const [kidsRefresh, setKidsRefresh] = useState(0)
+  const [kidsLoading, setKidsLoading] = useState(false)
+  const [kidsMessage, setKidsMessage] = useState('')
+  const [pendingGame, setPendingGame] = useState<GameId | null>(null)
+  const [startingGame, setStartingGame] = useState(false)
+  const [playId, setPlayId] = useState(0)
+  const [exitConfirm, setExitConfirm] = useState(false)
+  const [reminderVisible, setReminderVisible] = useState(false)
+  const [profileSection, setProfileSection] = useState<ProfileSection>(null)
+  const [profileNotice, setProfileNotice] = useState('')
 
   const child = session?.children[0]
+  const isKidsMode = mode === 'child'
 
   useEffect(() => {
     let cancelled = false
@@ -836,6 +1126,7 @@ export default function App() {
       .then(result => {
         if (cancelled) return
         setSession(result)
+        setMode(result.mode)
         setScreen('app')
       })
       .catch(() => {})
@@ -847,11 +1138,29 @@ export default function App() {
 
   useEffect(() => {
     const handleUnauthorized = () => {
-      setSession(null)
+      resetLocalSession()
       setScreen('login')
     }
     window.addEventListener('medbunny:unauthorized', handleUnauthorized)
     return () => window.removeEventListener('medbunny:unauthorized', handleUnauthorized)
+  }, [])
+
+  useEffect(() => {
+    const handleParentRequired = () => {
+      api.me()
+        .then(result => {
+          setSession(result)
+          setMode(result.mode)
+          if (result.mode === 'child') {
+            setPage('Home')
+            setKidsScreen('dashboard')
+            setKidsRefresh(value => value + 1)
+          }
+        })
+        .catch(() => {})
+    }
+    window.addEventListener('medbunny:parent-required', handleParentRequired)
+    return () => window.removeEventListener('medbunny:parent-required', handleParentRequired)
   }, [])
 
   useEffect(() => {
@@ -877,7 +1186,7 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (!child) return
+    if (!child || mode !== 'parent') return
     let cancelled = false
     const weekStart = startOfWeek(new Date())
     const weekEnd = addDays(weekStart, 6)
@@ -901,16 +1210,86 @@ export default function App() {
       })
 
     return () => { cancelled = true }
-  }, [child?.id, homeRefresh])
+  }, [child?.id, homeRefresh, mode])
+
+  useEffect(() => {
+    if (!child || mode !== 'child') return
+    let cancelled = false
+    setKidsLoading(true)
+    api.getKidsState()
+      .then(result => {
+        if (cancelled) return
+        setKidsState(result)
+        setKidsMessage('')
+      })
+      .catch(error => {
+        if (!cancelled) setKidsMessage(errorMessage(error))
+      })
+      .finally(() => {
+        if (!cancelled) setKidsLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [child?.id, mode, kidsRefresh])
+
+  useEffect(() => {
+    setReminderVisible(false)
+    const reminderAt = kidsState?.session?.reminderAt
+    if (mode !== 'child' || !reminderAt) return
+    const delay = new Date(reminderAt).getTime() - Date.now()
+    if (delay <= 0) return
+    const timer = window.setTimeout(() => setReminderVisible(true), delay)
+    return () => window.clearTimeout(timer)
+  }, [mode, kidsState?.session?.reminderAt])
+
+  useEffect(() => {
+    if (!reminderVisible) return
+    const timer = window.setTimeout(() => setReminderVisible(false), 12000)
+    return () => window.clearTimeout(timer)
+  }, [reminderVisible])
 
   async function handleAuthSubmit(input: { name: string; email: string; password: string }) {
+    resetLocalSession()
     const result = screen === 'signup'
       ? await api.signup(input)
       : await api.login({ email: input.email, password: input.password })
 
     setSession(result)
+    setMode(result.mode)
     setPage('Home')
     setScreen('app')
+  }
+
+  function resetLocalSession() {
+    setSession(null)
+    setMode('parent')
+    setKidsState(null)
+    setKidsScreen('dashboard')
+    setPage('Home')
+    setPreviousPage('Home')
+    setProfileSection(null)
+    setProfileNotice('')
+    setPinOpen(false)
+    setPin('')
+    setPinError('')
+    setPinLockedUntil(null)
+    setPinBusy(false)
+    setModeMenuOpen(false)
+    setPendingGame(null)
+    setStartingGame(false)
+    setExitConfirm(false)
+    setReminderVisible(false)
+    setProofOpen(false)
+    setProof('')
+    setProofName('')
+    setProofError('')
+    setActiveDose(null)
+    setConfirming(false)
+    setConfirmError('')
+    setHomeData({ weekDoses: [], balance: 0 })
+    setHomeError('')
+    setHomeLoading(true)
+    setKidsMessage('')
+    setKidsLoading(false)
   }
 
   async function handleLogout() {
@@ -919,9 +1298,108 @@ export default function App() {
     } catch {
       // Tetap bersihkan sesi lokal kalau server tidak bisa dihubungi.
     }
-    setSession(null)
-    setPage('Home')
+    resetLocalSession()
     setScreen('landing')
+  }
+
+  async function handleForgotPin() {
+    try {
+      await api.logout()
+    } catch {
+      // Dialog PIN tetap ditutup walau server tidak bisa dihubungi.
+    }
+    resetLocalSession()
+    setScreen('login')
+  }
+
+  function openProfile() {
+    if (mode !== 'parent' || page === 'Profile') return
+    setPreviousPage(page)
+    setProfileSection(null)
+    setProfileNotice('')
+    setPage('Profile')
+  }
+
+  function closePinDialog() {
+    if (pinBusy) return
+    setPinOpen(false)
+    setPin('')
+    setPinError('')
+    setPinLockedUntil(null)
+  }
+
+  function openPinDialog() {
+    setModeMenuOpen(false)
+    setPin('')
+    setPinError('')
+    setPinLockedUntil(null)
+    setPinOpen(true)
+  }
+
+  async function enterKidsMode() {
+    setModeMenuOpen(false)
+    if (!child) return
+
+    try {
+      const result = await api.switchToKids(child.id)
+      setSession(current => current && { ...current, mode: 'child', childId: result.childId })
+      setMode('child')
+      setKidsState(null)
+      setKidsScreen('dashboard')
+      setKidsMessage('')
+      setPage('Home')
+      setProfileSection(null)
+      setProfileNotice('')
+    } catch (error) {
+      if (error instanceof ApiError && error.code === 'PIN_NOT_SET') {
+        if (page !== 'Profile') setPreviousPage(page)
+        setProfileSection('security')
+        setProfileNotice('Atur PIN dulu sebelum masuk Kids mode.')
+        setPage('Profile')
+      } else {
+        setKidsMessage(errorMessage(error))
+      }
+    }
+  }
+
+  async function handlePinSubmit(event: FormEvent) {
+    event.preventDefault()
+    if (pin.length !== 4 || pinBusy) return
+
+    setPinBusy(true)
+    setPinError('')
+    try {
+      await api.switchToParent(pin)
+      setSession(current => current && { ...current, mode: 'parent', childId: null })
+      setMode('parent')
+      setKidsState(null)
+      setKidsScreen('dashboard')
+      setPin('')
+      setPinOpen(false)
+      setPage('Home')
+      setHomeRefresh(value => value + 1)
+    } catch (error) {
+      if (error instanceof ApiError && error.code === 'INVALID_PIN') {
+        const remaining = typeof error.details.remainingAttempts === 'number'
+          ? error.details.remainingAttempts
+          : null
+        setPin('')
+        setPinError(remaining
+          ? `PIN salah. Sisa ${remaining} percobaan.`
+          : 'PIN salah. Coba lagi ya.')
+      } else if (error instanceof ApiError && error.code === 'PIN_LOCKED') {
+        const lockedUntil = typeof error.details.lockedUntil === 'string'
+          ? error.details.lockedUntil
+          : null
+        setPin('')
+        setPinLockedUntil(lockedUntil)
+        setPinError('Terlalu banyak percobaan PIN.')
+      } else {
+        setPinError(errorMessage(error))
+      }
+    } finally {
+      setPinBusy(false)
+    }
   }
 
   function openProof(dose: DoseLog) {
@@ -959,21 +1437,94 @@ export default function App() {
     }
   }
 
+  function goDashboard() {
+    setKidsScreen('dashboard')
+    setKidsMessage('')
+    setKidsRefresh(value => value + 1)
+  }
+
+  function requestPlay(game: GameId) {
+    if (!kidsState || kidsState.starBalance <= 0) return
+    if (!kidsState.session || new Date(kidsState.session.endsAt).getTime() <= Date.now()) return
+    setKidsMessage('')
+    setPendingGame(game)
+  }
+
+  async function confirmStartGame() {
+    if (!pendingGame || startingGame) return
+    const game = pendingGame
+
+    setStartingGame(true)
+    try {
+      const { starBalance } = await api.startGame(game)
+      setKidsState(state => state ? { ...state, starBalance } : state)
+      setPlayId(id => id + 1)
+      setKidsScreen(game)
+      setKidsMessage('')
+    } catch (error) {
+      setKidsScreen('dashboard')
+      setKidsRefresh(value => value + 1)
+      setKidsMessage(errorMessage(error))
+    } finally {
+      setStartingGame(false)
+      setPendingGame(null)
+    }
+  }
+
+  function handleExit(finished: boolean) {
+    if (finished) {
+      goDashboard()
+      return
+    }
+    setExitConfirm(true)
+  }
+
+  function renderKidsGame(game: GameId) {
+    const sessionActive = !!kidsState?.session && new Date(kidsState.session.endsAt).getTime() > Date.now()
+    const canPlayAgain = sessionActive && (kidsState?.starBalance ?? 0) > 0
+    const onPlayAgain = () => {
+      setKidsMessage('')
+      setPendingGame(game)
+    }
+
+    switch (game) {
+      case 'garden':
+        return <KidsGarden key={playId} onExit={handleExit} />
+      case 'style':
+        return <KidsDressUp key={playId} onExit={handleExit} onPlayAgain={onPlayAgain} canPlayAgain={canPlayAgain} />
+      case 'match-up':
+        return <KidsMatchUp key={playId} onExit={handleExit} onPlayAgain={onPlayAgain} canPlayAgain={canPlayAgain} />
+      case 'color-hunt':
+        return <KidsColorHunt key={playId} onExit={handleExit} onPlayAgain={onPlayAgain} canPlayAgain={canPlayAgain} />
+    }
+  }
+
   if (checkingSession) {
     return <div className="app-loading"><img src="/assets/bunny-sleeping.png" alt="" /><p>Getting your routine ready…</p></div>
   }
 
-  if (screen === 'garden-preview') return <div className="app kids-active garden-preview-app">
-    <aside className="sidebar">
-      <button className="logo garden-preview-logo" aria-label="Back to MedBunny" onClick={() => setScreen('landing')}><img src="/assets/logo.png" alt="MedBunny rabbit logo" /></button>
-    </aside>
-    <main className="kids-main">
-      <header><button className="mode garden-preview-mode" onClick={() => setScreen('landing')}><Icon name="chevron" size={15} />Kids mode preview</button></header>
-      <div className="page-content kids-page-content">
-        {kidsScreen === 'garden' ? <KidsGarden onBack={() => setKidsScreen('dashboard')} /> : kidsScreen === 'match-up' ? <KidsMatchUp onBack={() => setKidsScreen('dashboard')} /> : kidsScreen === 'dress-up' ? <KidsDressUp onBack={() => setKidsScreen('dashboard')} /> : kidsScreen === 'color-hunt' ? <KidsColorHunt onBack={() => setKidsScreen('dashboard')} /> : <KidsDashboard name="Bunny" balance={0} onOpenGarden={() => setKidsScreen('garden')} onOpenMatchUp={() => setKidsScreen('match-up')} onOpenDressUp={() => setKidsScreen('dress-up')} onOpenColorHunt={() => setKidsScreen('color-hunt')} />}
-      </div>
-    </main>
-  </div>
+  if (screen === 'garden-preview') {
+    const previewState: KidsState = {
+      childName: 'Bunny',
+      bunny: 'awake',
+      starBalance: 99,
+      session: { endsAt: '2099-12-31T23:59:59.000Z', reminderAt: null },
+    }
+    const previewBack = () => setKidsScreen('dashboard')
+    const previewAgain = () => setPlayId(id => id + 1)
+
+    return <div className="app kids-active garden-preview-app">
+      <aside className="sidebar">
+        <button className="logo garden-preview-logo" aria-label="Back to MedBunny" onClick={() => setScreen('landing')}><img src="/assets/logo.png" alt="MedBunny rabbit logo" /></button>
+      </aside>
+      <main className="kids-main">
+        <header><button className="mode garden-preview-mode" onClick={() => setScreen('landing')}><Icon name="chevron" size={15} />Kids mode preview</button></header>
+        <div className="page-content kids-page-content">
+          {kidsScreen === 'garden' ? <KidsGarden key={playId} onExit={previewBack} /> : kidsScreen === 'style' ? <KidsDressUp key={playId} onExit={previewBack} onPlayAgain={previewAgain} canPlayAgain /> : kidsScreen === 'match-up' ? <KidsMatchUp key={playId} onExit={previewBack} onPlayAgain={previewAgain} canPlayAgain /> : kidsScreen === 'color-hunt' ? <KidsColorHunt key={playId} onExit={previewBack} onPlayAgain={previewAgain} canPlayAgain /> : <KidsDashboard kidsState={previewState} onPlay={game => setKidsScreen(game)} />}
+        </div>
+      </main>
+    </div>
+  }
   if (screen === 'landing') return <LandingPage onLogin={() => setScreen('login')} onSignup={() => setScreen('signup')} />
   if (screen === 'login' || screen === 'signup') return <AuthPage mode={screen} onBack={() => setScreen('landing')} onSwitch={() => setScreen(screen === 'login' ? 'signup' : 'login')} onSubmit={handleAuthSubmit} />
 
@@ -1008,27 +1559,12 @@ export default function App() {
   const avatarLetter = session.user.name.trim().charAt(0).toUpperCase() || 'P'
   const greeting = now.getHours() < 12 ? 'Good morning' : now.getHours() < 18 ? 'Good afternoon' : 'Good evening'
   const clockTime = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).split(' ')
-
-  function closePinDialog() {
-    setPinOpen(false)
-    setPin('')
-  }
-
-  function handlePinSubmit(event: FormEvent) {
-    event.preventDefault()
-    if (pin.length !== 4) return
-    setMode('Kids mode')
-    setKidsScreen('dashboard')
-    setPage('Home')
-    closePinDialog()
-  }
-
-  const isKidsMode = mode === 'Kids mode'
-  const childName = child.nickname?.trim() || session.user.name.split(' ')[0] || 'kiddo'
+  const childName = kidsState?.childName ?? child.nickname?.trim() ?? session.user.name.split(' ')[0] ?? 'kiddo'
+  const pinLockMinutes = lockMinutesLeft(pinLockedUntil, now)
 
   return <div className={`app ${isKidsMode ? 'kids-active' : ''}`}>
     <aside className="sidebar">
-      <a className="logo" href="#" aria-label="MedBunny home" onClick={() => { setPage('Home'); setKidsScreen('dashboard') }}><img src="/assets/logo.png" alt="MedBunny rabbit logo" /></a>
+      <a className="logo" href="#" aria-label="MedBunny home" onClick={event => { event.preventDefault(); setPage('Home'); setKidsScreen('dashboard') }}><img src="/assets/logo.png" alt="MedBunny rabbit logo" /></a>
       {!isKidsMode && <nav>{['Home', 'Schedule', 'History'].map(item => <button key={item} className={`nav-item ${page === item ? 'active' : ''}`} onClick={() => { setPage(item); if (item !== 'Home') setPreviousPage(item) }}><Icon name={item.toLowerCase()} /><span>{item}</span></button>)}</nav>}
       {!isKidsMode && <div className="sidebar-bottom"><span className="little-heart"><Icon name="heart" size={21} /></span><span>A little care,<br />every day.</span></div>}
     </aside>
@@ -1040,7 +1576,7 @@ export default function App() {
             aria-haspopup="menu"
             onClick={() => setModeMenuOpen(open => !open)}
           >
-            {mode}
+            {isKidsMode ? 'Kids mode' : 'Parent mode'}
             <span className={`mode-chevron ${modeMenuOpen ? 'open' : ''}`}>
               <Icon name="down" size={16} />
             </span>
@@ -1051,29 +1587,25 @@ export default function App() {
               <button
                 role="menuitem"
                 onClick={() => {
-                  setModeMenuOpen(false)
-
-                  if (mode === 'Parent mode') {
-                    setPin('')
-                    setPinOpen(true)
+                  if (isKidsMode) {
+                    openPinDialog()
                   } else {
-                    setMode('Parent mode')
-                    setKidsScreen('dashboard')
+                    void enterKidsMode()
                   }
                 }}
               >
-                {mode === 'Parent mode'
-                  ? 'Switch to kids mode'
-                  : 'Switch to parent mode'}
-
+                {isKidsMode ? 'Switch to parent mode' : 'Switch to kids mode'}
                 <Icon name="chevron" size={15} />
               </button>
             </div>
           )}
         </div>
-        <button className="avatar" aria-label={isKidsMode ? `${childName}'s profile` : 'Open profile'} aria-current={page === 'Profile' ? 'page' : undefined} onClick={() => { if (!isKidsMode && page !== 'Profile') { setPreviousPage(page); setPage('Profile') } }}>{isKidsMode ? childName.charAt(0).toUpperCase() : avatarLetter}</button></header>
+        <button className="avatar" aria-label={isKidsMode ? `${childName}'s profile` : 'Open profile'} aria-current={page === 'Profile' ? 'page' : undefined} onClick={openProfile}>{isKidsMode ? childName.charAt(0).toUpperCase() : avatarLetter}</button></header>
       <div className={`page-content ${isKidsMode ? 'kids-page-content' : ''}`}>
-        {isKidsMode ? kidsScreen === 'garden' ? <KidsGarden onBack={() => setKidsScreen('dashboard')} /> : kidsScreen === 'match-up' ? <KidsMatchUp onBack={() => setKidsScreen('dashboard')} /> : kidsScreen === 'dress-up' ? <KidsDressUp onBack={() => setKidsScreen('dashboard')} /> : kidsScreen === 'color-hunt' ? <KidsColorHunt onBack={() => setKidsScreen('dashboard')} /> : <KidsDashboard name={childName} balance={homeData.balance} onOpenGarden={() => setKidsScreen('garden')} onOpenMatchUp={() => setKidsScreen('match-up')} onOpenDressUp={() => setKidsScreen('dress-up')} onOpenColorHunt={() => setKidsScreen('color-hunt')} /> : page === 'Profile' ? <ProfilePage user={session.user} child={child} onBack={() => setPage(previousPage)} onLogout={() => void handleLogout()} /> : page === 'Schedule' ? <MedicationSchedule childId={child.id} onChanged={() => setHomeRefresh(value => value + 1)} /> : page === 'History' ? <MedicationHistory childId={child.id} /> : <>
+        {isKidsMode ? kidsScreen === 'dashboard' ? (kidsState
+          ? <KidsDashboard kidsState={kidsState} onPlay={requestPlay} message={kidsMessage} />
+          : <div className="app-loading kids-loading"><img src="/assets/bunny-sleeping.png" alt="" /><p>{kidsMessage || (kidsLoading ? 'Getting Bunny ready…' : 'Bunny is resting.')}</p>{!kidsLoading && <button className="profile-save" type="button" onClick={() => setKidsRefresh(value => value + 1)}>Coba lagi</button>}</div>
+        ) : renderKidsGame(kidsScreen) : page === 'Profile' ? <ProfilePage user={session.user} child={child} onBack={() => { setPage(previousPage); setProfileSection(null); setProfileNotice('') }} onLogout={() => void handleLogout()} initialSection={profileSection} notice={profileNotice} onPinSaved={() => setProfileNotice('')} /> : page === 'Schedule' ? <MedicationSchedule childId={child.id} onChanged={() => setHomeRefresh(value => value + 1)} /> : page === 'History' ? <MedicationHistory childId={child.id} /> : <>
           <div className="greeting"><div><div className="eyebrow">A LITTLE CARE GOES A LONG WAY</div><h1>{greeting}, {session.user.name.split(' ')[0]}!<span className="greeting-sun"><Icon name="sun" size={30} /></span></h1><p>{now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} <span>·</span> Let's make today a healthy one.</p></div><div className="greeting-clock"><span>LOCAL TIME</span><time dateTime={now.toTimeString().slice(0, 5)}>{clockTime[0]} <small>{clockTime[1]}</small></time></div></div>
           <section className="top-grid">
             <div className="week-card"><div className="section-heading"><h2>Your week at a glance</h2><span className="week-month"><span className="week-month-text">{now.toLocaleDateString('en-US', { month: 'long' })}</span></span></div><div className="week" aria-label={`Week of ${weekStart.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}–${weekEnd.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`}>{weekDays.map(day => <div key={day.key} className={`week-day${day.isToday ? ' selected' : ''}`} aria-current={day.isToday ? 'date' : undefined}><span>{day.label}</span><strong>{day.date}</strong><i className={day.hasDose ? 'has-dose' : ''} /></div>)}</div></div>
@@ -1088,20 +1620,53 @@ export default function App() {
         <footer><img className="footer-wordmark" src="/assets/medbunny-wordmark.png" alt="MedBunny" /><span>Made for little ones. Here for you.</span><span className="footer-heart"><Icon name="heart" size={14} /> Growing healthier, together.</span></footer>
       </div>
     </main>
-    {pinOpen && <dialog className="pin-dialog" ref={node => { if (node && !node.open) { node.showModal(); node.querySelector('input')?.focus() } }} onCancel={closePinDialog} onClick={event => { if (event.target === event.currentTarget) closePinDialog() }} aria-labelledby="pin-title" aria-describedby="pin-description">
+
+    {reminderVisible && isKidsMode && <div className="kids-reminder-toast" role="status">
+      <img src="/assets/bunny-peeking.png" alt="" />
+      <p>Sebentar lagi istirahat ya</p>
+      <button type="button" onClick={() => setReminderVisible(false)} aria-label="Tutup pengingat"><Icon name="close" size={16} /></button>
+    </div>}
+
+    {pinOpen && <dialog className="pin-dialog" ref={node => { if (node && !node.open) { node.showModal(); node.querySelector('input')?.focus() } }} onCancel={event => { event.preventDefault(); closePinDialog() }} onClick={event => { if (event.target === event.currentTarget) closePinDialog() }} aria-labelledby="pin-title" aria-describedby="pin-description">
       <form className="pin-form" onSubmit={handlePinSubmit}>
-        <div className="pin-top"><span className="pin-symbol"><Icon name="shield" size={28} /></span><button className="pin-close" type="button" aria-label="Close PIN dialog" onClick={closePinDialog}><Icon name="close" size={18} /></button></div>
+        <div className="pin-top"><span className="pin-symbol"><Icon name="shield" size={28} /></span><button className="pin-close" type="button" aria-label="Close PIN dialog" disabled={pinBusy} onClick={closePinDialog}><Icon name="close" size={18} /></button></div>
         <h2 id="pin-title">Enter parent PIN</h2>
-        <p id="pin-description">Enter your 4-digit PIN to switch to kids mode.</p>
+        <p id="pin-description">Enter your 4-digit PIN to switch back to parent mode.</p>
         <label className="pin-label" htmlFor="parent-pin">Parent PIN</label>
         <div className="pin-field">
           <span className="pin-dots" aria-hidden="true">{[0, 1, 2, 3].map(index => <i key={index} className={index < pin.length ? 'filled' : ''} />)}</span>
-          <input id="parent-pin" className="pin-input" type="text" inputMode="numeric" autoComplete="off" pattern="[0-9]*" maxLength={4} value={pin} onChange={event => setPin(event.target.value.replace(/\D/g, '').slice(0, 4))} autoFocus aria-label="Parent PIN, 4 digits" />
+          <input id="parent-pin" className="pin-input" type="text" inputMode="numeric" autoComplete="off" pattern="[0-9]*" maxLength={4} value={pin} disabled={pinBusy || pinLockMinutes > 0} onChange={event => setPin(event.target.value.replace(/\D/g, '').slice(0, 4))} autoFocus aria-label="Parent PIN, 4 digits" />
         </div>
-        <button className="pin-submit" type="submit" disabled={pin.length !== 4}>Switch to kids mode <Icon name="chevron" size={17} /></button>
-        <p className="pin-hint">Demo only — enter any 4 digits.</p>
+        {pinError && <p className="pin-error" role="alert">{pinError}{pinLockMinutes > 0 ? ` Coba lagi dalam ${pinLockMinutes} menit.` : ''}</p>}
+        <button className="pin-submit" type="submit" disabled={pin.length !== 4 || pinBusy || pinLockMinutes > 0}>{pinBusy ? 'Checking…' : <>Switch to parent mode <Icon name="chevron" size={17} /></>}</button>
+        <button className="pin-forgot" type="button" disabled={pinBusy} onClick={() => void handleForgotPin()}>Lupa PIN?</button>
       </form>
     </dialog>}
+
+    {pendingGame && <dialog className="play-confirm-dialog" ref={node => { if (node && !node.open) node.showModal() }} onCancel={event => { event.preventDefault(); if (!startingGame) setPendingGame(null) }} onClick={event => { if (event.target === event.currentTarget && !startingGame) setPendingGame(null) }} aria-labelledby="play-confirm-title" aria-describedby="play-confirm-description">
+      <div className="play-confirm">
+        <img src="/assets/happy-star.png" alt="" />
+        <h2 id="play-confirm-title">Pakai 1 ⭐ untuk main?</h2>
+        <p id="play-confirm-description">Bintang ini dipakai saat game dimulai.</p>
+        <div className="play-confirm-actions">
+          <button className="play-confirm-yes" type="button" disabled={startingGame} onClick={() => void confirmStartGame()} aria-label="Ya, pakai satu bintang untuk main">{startingGame ? '…' : <Icon name="check" size={24} />}</button>
+          <button className="play-confirm-no" type="button" disabled={startingGame} onClick={() => setPendingGame(null)} aria-label="Tidak, kembali"><Icon name="close" size={22} /></button>
+        </div>
+      </div>
+    </dialog>}
+
+    {exitConfirm && <dialog className="play-confirm-dialog" ref={node => { if (node && !node.open) node.showModal() }} onCancel={event => { event.preventDefault(); setExitConfirm(false) }} onClick={event => { if (event.target === event.currentTarget) setExitConfirm(false) }} aria-labelledby="exit-confirm-title" aria-describedby="exit-confirm-description">
+      <div className="play-confirm exit-confirm">
+        <img src="/assets/bunny-sleeping.png" alt="" />
+        <h2 id="exit-confirm-title">Selesai main?</h2>
+        <p id="exit-confirm-description">Bintangnya sudah terpakai ya.</p>
+        <div className="play-confirm-actions play-confirm-text">
+          <button className="play-confirm-continue" type="button" onClick={() => setExitConfirm(false)}>Lanjut main</button>
+          <button className="play-confirm-finish" type="button" onClick={() => { setExitConfirm(false); goDashboard() }}>Selesai</button>
+        </div>
+      </div>
+    </dialog>}
+
     {proofOpen && activeDose && <dialog className="proof-dialog" ref={node => { if (node && !node.open) node.showModal() }} onCancel={() => setProofOpen(false)} aria-labelledby="proof-title" aria-describedby="proof-description">
       <form onSubmit={event => void handleConfirm(event)}>
         <span className="proof-symbol"><Icon name="pill" size={26} /></span>

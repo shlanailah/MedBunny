@@ -7,8 +7,11 @@ import { toChildDto, toUserDto } from '../lib/dto.js'
 import { clearSessionCookie, setSessionCookie } from '../lib/session.js'
 import { errorResponse, SessionSchema } from '../lib/schemas.js'
 import { requireAuth } from '../middleware/auth.js'
+import type { SessionMode } from '../types.js'
 
 export const authRoutes = createRouter()
+
+const WELCOME_BONUS_STARS = 3
 
 const CredentialsSchema = z
   .object({
@@ -21,7 +24,7 @@ const SignupSchema = CredentialsSchema.extend({
   name: z.string().trim().min(1, 'Nama wajib diisi').max(100, 'Nama maksimal 100 karakter'),
 }).openapi('SignupInput')
 
-async function loadSession(userId: string) {
+async function loadSession(userId: string, mode: SessionMode, childId: string | null) {
   const [user, children] = await Promise.all([
     prisma.user.findUniqueOrThrow({ where: { id: userId } }),
     prisma.child.findMany({
@@ -34,6 +37,8 @@ async function loadSession(userId: string) {
   return {
     user: toUserDto(user),
     children: children.map(toChildDto),
+    mode,
+    childId,
   }
 }
 
@@ -82,12 +87,19 @@ authRoutes.openapi(signupRoute, async (c) => {
           passwordHash,
         },
       })
-      await tx.child.create({ data: { userId: created.id } })
+      const child = await tx.child.create({ data: { userId: created.id } })
+      await tx.starTransaction.create({
+        data: {
+          childId: child.id,
+          amount: WELCOME_BONUS_STARS,
+          reason: 'WELCOME_BONUS',
+        },
+      })
       return created
     })
 
-    await setSessionCookie(c, user.id)
-    const session = await loadSession(user.id)
+    await setSessionCookie(c, user.id, 'parent')
+    const session = await loadSession(user.id, 'parent', null)
     return c.json(session, 201)
   } catch (error) {
     if ((error as { code?: string }).code === 'P2002') {
@@ -134,8 +146,8 @@ authRoutes.openapi(loginRoute, async (c) => {
     return apiError(c, 401, 'INVALID_CREDENTIALS', 'Email atau password salah.')
   }
 
-  await setSessionCookie(c, user.id)
-  const session = await loadSession(user.id)
+  await setSessionCookie(c, user.id, 'parent')
+  const session = await loadSession(user.id, 'parent', null)
   return c.json(session, 200)
 })
 
@@ -174,6 +186,8 @@ const meRoute = createRoute({
 
 authRoutes.openapi(meRoute, async (c) => {
   const user = c.get('user')
+  const mode = c.get('sessionMode')
+  const childId = mode === 'child' ? c.get('child').id : null
   const children = await prisma.child.findMany({
     where: { userId: user.id },
     orderBy: { createdAt: 'asc' },
@@ -184,6 +198,8 @@ authRoutes.openapi(meRoute, async (c) => {
     {
       user: toUserDto(user),
       children: children.map(toChildDto),
+      mode,
+      childId,
     },
     200,
   )
