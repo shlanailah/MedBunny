@@ -390,7 +390,7 @@ function LandingPage({ onLogin, onSignup }: { onLogin: () => void; onSignup: () 
   </div>
 }
 
-function AuthPage({ mode, onBack, onSubmit, onSwitch, onPreviewGarden }: { mode: 'login' | 'signup'; onBack: () => void; onSubmit: (input: { name: string; email: string; password: string }) => Promise<void>; onSwitch: () => void; onPreviewGarden: () => void }) {
+function AuthPage({ mode, onBack, onSubmit, onSwitch }: { mode: 'login' | 'signup'; onBack: () => void; onSubmit: (input: { name: string; email: string; password: string }) => Promise<void>; onSwitch: () => void }) {
   const isSignup = mode === 'signup'
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -432,7 +432,6 @@ function AuthPage({ mode, onBack, onSubmit, onSwitch, onPreviewGarden }: { mode:
           <button className="auth-submit" type="submit" disabled={submitting}>{submitting ? (isSignup ? 'Creating account…' : 'Logging in…') : <>{isSignup ? 'Create account' : 'Log in'}<Icon name="chevron" size={17} /></>}</button>
         </form>
         <p className="auth-switch">{isSignup ? 'Already have an account?' : 'New to MedBunny?'} <button onClick={onSwitch}>{isSignup ? 'Log in' : 'Create an account'}</button></p>
-        <button className="auth-garden-preview" onClick={onPreviewGarden}><Icon name="star" size={17} />Lihat Kids Games tanpa login<Icon name="chevron" size={15} /></button>
         <p className="auth-demo"><Icon name="shield" size={14} />Your account and your family’s routine stay private.</p>
       </div>
     </section>
@@ -609,10 +608,157 @@ function KidsMatchUp({ onBack }: { onBack: () => void }) {
   </section>
 }
 
-function KidsDashboard({ name, balance, onOpenGarden, onOpenMatchUp }: { name: string; balance: number; onOpenGarden: () => void; onOpenMatchUp: () => void }) {
+const DRESS_UP_CATEGORIES = [
+  {
+    title: 'Head',
+    items: [
+      { label: 'Baseball cap', image: '/assets/topi biasa.png' },
+      { label: 'Sun hat', image: '/assets/topi.png' },
+      { label: 'Crown', image: '/assets/mahkota.png' },
+    ],
+  },
+  {
+    title: 'Eyes',
+    items: [
+      { label: 'Classic glasses', image: '/assets/kacamata.png' },
+      { label: 'Round glasses', image: '/assets/kacamata bulat.png' },
+      { label: 'Sunglasses', image: '/assets/kacamata hitam.png' },
+    ],
+  },
+  {
+    title: 'Neck',
+    items: [
+      { label: 'Red bow', image: '/assets/dasi.png' },
+      { label: 'Flower necklace', image: '/assets/kalung.png' },
+      { label: 'MedBunny scarf', image: '/assets/scarf.png' },
+    ],
+  },
+]
+
+function KidsDressUp({ onBack }: { onBack: () => void }) {
+  return <section className="kids-dress-up" aria-labelledby="dress-up-title">
+    <button className="dress-up-back" onClick={onBack} aria-label="Back to games"><Icon name="chevron" size={20} /></button>
+    <div className="dress-up-heading">
+      <h1 id="dress-up-title">Bunny’s Style</h1>
+      <p>Choose your accessories</p>
+    </div>
+    <div className="dress-up-stage">
+      <div className="dress-up-bunny-wrap">
+        <span className="dress-up-spark spark-left" aria-hidden="true">✦</span>
+        <img src="/assets/bunny tegak.png" alt="MedBunny ready to dress up" />
+        <span className="dress-up-spark spark-right" aria-hidden="true">✦</span>
+      </div>
+      <div className="accessory-panel" aria-label="Accessory choices coming soon">
+        {DRESS_UP_CATEGORIES.map(category => <section className="accessory-column" key={category.title} aria-labelledby={`accessory-${category.title.toLowerCase()}`}>
+          <h2 id={`accessory-${category.title.toLowerCase()}`}>{category.title}</h2>
+          <div className="accessory-list">
+            {category.items.map(item => <div className="accessory-item" key={item.label}>
+              <img src={item.image} alt={item.label} />
+            </div>)}
+          </div>
+        </section>)}
+      </div>
+    </div>
+    <span className="dress-up-coming-soon">Bunny’s Style play is coming soon</span>
+  </section>
+}
+
+type HuntColor = 'yellow' | 'purple' | 'pink' | 'blue'
+
+const COLOR_HUNT_TARGETS: { id: HuntColor; label: string; boxImage: string }[] = [
+  { id: 'yellow', label: 'Yellow', boxImage: '/assets/color-hunt-yellow-box.png' },
+  { id: 'purple', label: 'Purple', boxImage: '/assets/color-hunt-purple-box.png' },
+  { id: 'pink', label: 'Pink', boxImage: '/assets/color-hunt-pink-box.png' },
+  { id: 'blue', label: 'Blue', boxImage: '/assets/color-hunt-blue-box.png' },
+]
+
+const COLOR_HUNT_FLOWERS: { id: string; color: HuntColor; image: string; position: string }[] = [
+  { id: 'pink-small', color: 'pink', image: '/assets/color-hunt-pink-flower.png', position: 'flower-pink-small' },
+  { id: 'blue-tall', color: 'blue', image: '/assets/color-hunt-blue-flower.png', position: 'flower-blue-tall' },
+  { id: 'yellow-left', color: 'yellow', image: '/assets/color-hunt-yellow-flower.png', position: 'flower-yellow-left' },
+  { id: 'yellow-center', color: 'yellow', image: '/assets/color-hunt-yellow-flower.png', position: 'flower-yellow-center' },
+  { id: 'blue-small', color: 'blue', image: '/assets/color-hunt-blue-flower.png', position: 'flower-blue-small' },
+  { id: 'pink-tall', color: 'pink', image: '/assets/color-hunt-pink-flower.png', position: 'flower-pink-tall' },
+  { id: 'purple-tall', color: 'purple', image: '/assets/color-hunt-purple-flower.png', position: 'flower-purple-tall' },
+]
+
+function KidsColorHunt({ onBack }: { onBack: () => void }) {
+  const [targetIndex, setTargetIndex] = useState(0)
+  const [feedback, setFeedback] = useState<{ flowerId: string; type: 'correct' | 'wrong' } | null>(null)
+  const [locked, setLocked] = useState(false)
+  const [complete, setComplete] = useState(false)
+  const feedbackTimer = useRef<number | null>(null)
+  const target = COLOR_HUNT_TARGETS[targetIndex]
+
+  useEffect(() => () => {
+    if (feedbackTimer.current) window.clearTimeout(feedbackTimer.current)
+  }, [])
+
+  function chooseFlower(flower: (typeof COLOR_HUNT_FLOWERS)[number]) {
+    if (locked || complete) return
+    const isCorrect = flower.color === target.id
+    setFeedback({ flowerId: flower.id, type: isCorrect ? 'correct' : 'wrong' })
+    setLocked(true)
+    feedbackTimer.current = window.setTimeout(() => {
+      setFeedback(null)
+      setLocked(false)
+      if (!isCorrect) return
+      if (targetIndex === COLOR_HUNT_TARGETS.length - 1) {
+        setComplete(true)
+      } else {
+        setTargetIndex(index => index + 1)
+      }
+    }, isCorrect ? 850 : 520)
+  }
+
+  function restartHunt() {
+    if (feedbackTimer.current) window.clearTimeout(feedbackTimer.current)
+    setTargetIndex(0)
+    setFeedback(null)
+    setLocked(false)
+    setComplete(false)
+  }
+
+  return <section className="kids-color-hunt" aria-labelledby="color-hunt-title">
+    <button className="color-hunt-back" onClick={onBack} aria-label="Back to games"><Icon name="chevron" size={20} /></button>
+    <div className="color-hunt-heading">
+      <h1 id="color-hunt-title">Bunny’s Color Hunt</h1>
+      <p>Choose flowers with the same color as the box</p>
+    </div>
+
+    <div className="color-hunt-target" key={target.id} aria-live="polite">
+      <img src={target.boxImage} alt={`${target.label} color box`} />
+      <strong>{target.label}</strong>
+      <div className="color-hunt-progress" aria-label={`Color ${targetIndex + 1} of ${COLOR_HUNT_TARGETS.length}`}>
+        {COLOR_HUNT_TARGETS.map((color, index) => <i className={index <= targetIndex ? 'active' : ''} key={color.id} />)}
+      </div>
+    </div>
+
+    <div className="color-hunt-meadow">
+      <img className="color-hunt-bush" src="/assets/color-hunt-bush.png" alt="" />
+      {COLOR_HUNT_FLOWERS.map(flower => <button
+        className={`color-hunt-flower ${flower.position}${feedback?.flowerId === flower.id ? ` ${feedback.type}` : ''}`}
+        key={flower.id}
+        onClick={() => chooseFlower(flower)}
+        disabled={locked || complete}
+        aria-label={`${flower.color} flower`}
+      >
+        <img src={flower.image} alt="" draggable={false} />
+      </button>)}
+    </div>
+
+    {complete && <div className="color-hunt-complete" role="status">
+      <span><Icon name="star" size={20} /></span>
+      <div><strong>Color hunt complete!</strong><p>You found every color.</p></div>
+      <button onClick={restartHunt}>Play again</button>
+    </div>}
+  </section>
+}
+
+function KidsDashboard({ name, balance, onOpenGarden, onOpenMatchUp, onOpenDressUp, onOpenColorHunt }: { name: string; balance: number; onOpenGarden: () => void; onOpenMatchUp: () => void; onOpenDressUp: () => void; onOpenColorHunt: () => void }) {
   const games = [
     { title: 'Bunny’s Garden', description: 'Grow a happy little garden', image: '/assets/schedule-bunny.png', tone: 'garden' },
-    { title: 'Bunny Dress-Up', description: 'Pick a cute outfit for Bunny', image: '/assets/kids-dress-up.png', tone: 'dress-up' },
+    { title: 'Bunny’s Style', description: 'Pick a cute accessories for Bunny', image: '/assets/kids-dress-up.png', tone: 'dress-up' },
     { title: 'Bunny’s Match-Up', description: 'Find all the matching pairs', image: '/assets/kids-match-up.png', tone: 'match-up' },
     { title: 'Bunny’s Color Hunt', description: 'Spot colors in the garden', image: '/assets/kids-color-hunt.png', tone: 'color-hunt' },
   ]
@@ -645,7 +791,7 @@ function KidsDashboard({ name, balance, onOpenGarden, onOpenMatchUp }: { name: s
     </div>
 
     <div className="kids-games-grid">
-      {games.map(game => game.tone === 'garden' || game.tone === 'match-up' ? <button className={`kids-game-card ${game.tone}`} key={game.title} onClick={game.tone === 'garden' ? onOpenGarden : onOpenMatchUp}>
+      {games.map(game => <button className={`kids-game-card ${game.tone}`} key={game.title} onClick={game.tone === 'garden' ? onOpenGarden : game.tone === 'match-up' ? onOpenMatchUp : game.tone === 'dress-up' ? onOpenDressUp : onOpenColorHunt}>
         <span className="kids-game-decor" aria-hidden="true">✦</span>
         <img src={game.image} alt="" />
         <div>
@@ -653,15 +799,7 @@ function KidsDashboard({ name, balance, onOpenGarden, onOpenMatchUp }: { name: s
           <p>{game.description}</p>
           <span className="kids-play-label">Play now <Icon name="chevron" size={15} /></span>
         </div>
-      </button> : <article className={`kids-game-card ${game.tone}`} key={game.title}>
-        <span className="kids-game-decor" aria-hidden="true">✦</span>
-        <img src={game.image} alt="" />
-        <div>
-          <h3>{game.title}</h3>
-          <p>{game.description}</p>
-          <span className="kids-play-label">Play soon <Icon name="chevron" size={15} /></span>
-        </div>
-      </article>)}
+      </button>)}
     </div>
   </section>
 }
@@ -673,7 +811,7 @@ export default function App() {
   const [page, setPage] = useState('Home')
   const [previousPage, setPreviousPage] = useState('Home')
   const [mode, setMode] = useState('Parent mode')
-  const [kidsScreen, setKidsScreen] = useState<'dashboard' | 'garden' | 'match-up'>('dashboard')
+  const [kidsScreen, setKidsScreen] = useState<'dashboard' | 'garden' | 'match-up' | 'dress-up' | 'color-hunt'>('dashboard')
   const [modeMenuOpen, setModeMenuOpen] = useState(false)
   const [pinOpen, setPinOpen] = useState(false)
   const [pin, setPin] = useState('')
@@ -832,12 +970,12 @@ export default function App() {
     <main className="kids-main">
       <header><button className="mode garden-preview-mode" onClick={() => setScreen('landing')}><Icon name="chevron" size={15} />Kids mode preview</button></header>
       <div className="page-content kids-page-content">
-        {kidsScreen === 'garden' ? <KidsGarden onBack={() => setKidsScreen('dashboard')} /> : kidsScreen === 'match-up' ? <KidsMatchUp onBack={() => setKidsScreen('dashboard')} /> : <KidsDashboard name="Bunny" balance={0} onOpenGarden={() => setKidsScreen('garden')} onOpenMatchUp={() => setKidsScreen('match-up')} />}
+        {kidsScreen === 'garden' ? <KidsGarden onBack={() => setKidsScreen('dashboard')} /> : kidsScreen === 'match-up' ? <KidsMatchUp onBack={() => setKidsScreen('dashboard')} /> : kidsScreen === 'dress-up' ? <KidsDressUp onBack={() => setKidsScreen('dashboard')} /> : kidsScreen === 'color-hunt' ? <KidsColorHunt onBack={() => setKidsScreen('dashboard')} /> : <KidsDashboard name="Bunny" balance={0} onOpenGarden={() => setKidsScreen('garden')} onOpenMatchUp={() => setKidsScreen('match-up')} onOpenDressUp={() => setKidsScreen('dress-up')} onOpenColorHunt={() => setKidsScreen('color-hunt')} />}
       </div>
     </main>
   </div>
   if (screen === 'landing') return <LandingPage onLogin={() => setScreen('login')} onSignup={() => setScreen('signup')} />
-  if (screen === 'login' || screen === 'signup') return <AuthPage mode={screen} onBack={() => setScreen('landing')} onSwitch={() => setScreen(screen === 'login' ? 'signup' : 'login')} onSubmit={handleAuthSubmit} onPreviewGarden={() => { setKidsScreen('dashboard'); setScreen('garden-preview') }} />
+  if (screen === 'login' || screen === 'signup') return <AuthPage mode={screen} onBack={() => setScreen('landing')} onSwitch={() => setScreen(screen === 'login' ? 'signup' : 'login')} onSubmit={handleAuthSubmit} />
 
   if (!session) return <LandingPage onLogin={() => setScreen('login')} onSignup={() => setScreen('signup')} />
   if (!child) return <div className="app-loading"><img src="/assets/bunny-sleeping.png" alt="" /><p>No child profile found for this account.</p></div>
@@ -935,7 +1073,7 @@ export default function App() {
         </div>
         <button className="avatar" aria-label={isKidsMode ? `${childName}'s profile` : 'Open profile'} aria-current={page === 'Profile' ? 'page' : undefined} onClick={() => { if (!isKidsMode && page !== 'Profile') { setPreviousPage(page); setPage('Profile') } }}>{isKidsMode ? childName.charAt(0).toUpperCase() : avatarLetter}</button></header>
       <div className={`page-content ${isKidsMode ? 'kids-page-content' : ''}`}>
-        {isKidsMode ? kidsScreen === 'garden' ? <KidsGarden onBack={() => setKidsScreen('dashboard')} /> : kidsScreen === 'match-up' ? <KidsMatchUp onBack={() => setKidsScreen('dashboard')} /> : <KidsDashboard name={childName} balance={homeData.balance} onOpenGarden={() => setKidsScreen('garden')} onOpenMatchUp={() => setKidsScreen('match-up')} /> : page === 'Profile' ? <ProfilePage user={session.user} child={child} onBack={() => setPage(previousPage)} onLogout={() => void handleLogout()} /> : page === 'Schedule' ? <MedicationSchedule childId={child.id} onChanged={() => setHomeRefresh(value => value + 1)} /> : page === 'History' ? <MedicationHistory childId={child.id} /> : <>
+        {isKidsMode ? kidsScreen === 'garden' ? <KidsGarden onBack={() => setKidsScreen('dashboard')} /> : kidsScreen === 'match-up' ? <KidsMatchUp onBack={() => setKidsScreen('dashboard')} /> : kidsScreen === 'dress-up' ? <KidsDressUp onBack={() => setKidsScreen('dashboard')} /> : kidsScreen === 'color-hunt' ? <KidsColorHunt onBack={() => setKidsScreen('dashboard')} /> : <KidsDashboard name={childName} balance={homeData.balance} onOpenGarden={() => setKidsScreen('garden')} onOpenMatchUp={() => setKidsScreen('match-up')} onOpenDressUp={() => setKidsScreen('dress-up')} onOpenColorHunt={() => setKidsScreen('color-hunt')} /> : page === 'Profile' ? <ProfilePage user={session.user} child={child} onBack={() => setPage(previousPage)} onLogout={() => void handleLogout()} /> : page === 'Schedule' ? <MedicationSchedule childId={child.id} onChanged={() => setHomeRefresh(value => value + 1)} /> : page === 'History' ? <MedicationHistory childId={child.id} /> : <>
           <div className="greeting"><div><div className="eyebrow">A LITTLE CARE GOES A LONG WAY</div><h1>{greeting}, {session.user.name.split(' ')[0]}!<span className="greeting-sun"><Icon name="sun" size={30} /></span></h1><p>{now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} <span>·</span> Let's make today a healthy one.</p></div><div className="greeting-clock"><span>LOCAL TIME</span><time dateTime={now.toTimeString().slice(0, 5)}>{clockTime[0]} <small>{clockTime[1]}</small></time></div></div>
           <section className="top-grid">
             <div className="week-card"><div className="section-heading"><h2>Your week at a glance</h2><span className="week-month"><span className="week-month-text">{now.toLocaleDateString('en-US', { month: 'long' })}</span></span></div><div className="week" aria-label={`Week of ${weekStart.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}–${weekEnd.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`}>{weekDays.map(day => <div key={day.key} className={`week-day${day.isToday ? ' selected' : ''}`} aria-current={day.isToday ? 'date' : undefined}><span>{day.label}</span><strong>{day.date}</strong><i className={day.hasDose ? 'has-dose' : ''} /></div>)}</div></div>
