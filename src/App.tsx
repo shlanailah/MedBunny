@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import {
   api,
   ApiError,
@@ -302,7 +302,7 @@ function ProfilePage({ user, child, onBack, onLogout }: { user: SessionUser; chi
   </section>
 }
 
-type PublicScreen = 'landing' | 'login' | 'signup' | 'app'
+type PublicScreen = 'landing' | 'login' | 'signup' | 'garden-preview' | 'app'
 
 function useScrollReveal(rootRef: { current: HTMLDivElement | null }) {
   useLayoutEffect(() => {
@@ -390,7 +390,7 @@ function LandingPage({ onLogin, onSignup }: { onLogin: () => void; onSignup: () 
   </div>
 }
 
-function AuthPage({ mode, onBack, onSubmit, onSwitch }: { mode: 'login' | 'signup'; onBack: () => void; onSubmit: (input: { name: string; email: string; password: string }) => Promise<void>; onSwitch: () => void }) {
+function AuthPage({ mode, onBack, onSubmit, onSwitch, onPreviewGarden }: { mode: 'login' | 'signup'; onBack: () => void; onSubmit: (input: { name: string; email: string; password: string }) => Promise<void>; onSwitch: () => void; onPreviewGarden: () => void }) {
   const isSignup = mode === 'signup'
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -432,13 +432,184 @@ function AuthPage({ mode, onBack, onSubmit, onSwitch }: { mode: 'login' | 'signu
           <button className="auth-submit" type="submit" disabled={submitting}>{submitting ? (isSignup ? 'Creating account…' : 'Logging in…') : <>{isSignup ? 'Create account' : 'Log in'}<Icon name="chevron" size={17} /></>}</button>
         </form>
         <p className="auth-switch">{isSignup ? 'Already have an account?' : 'New to MedBunny?'} <button onClick={onSwitch}>{isSignup ? 'Log in' : 'Create an account'}</button></p>
+        <button className="auth-garden-preview" onClick={onPreviewGarden}><Icon name="star" size={17} />Lihat Kids Games tanpa login<Icon name="chevron" size={15} /></button>
         <p className="auth-demo"><Icon name="shield" size={14} />Your account and your family’s routine stay private.</p>
       </div>
     </section>
   </main>
 }
 
-function KidsDashboard({ name, balance }: { name: string; balance: number }) {
+type GardenFlower = 'pink' | 'purple' | 'yellow' | 'blue'
+
+const GARDEN_FLOWERS: { id: GardenFlower; label: string; flowerImage: string; plotImage: string }[] = [
+  { id: 'pink', label: 'Pink flower', flowerImage: '/assets/bunga pink.png', plotImage: '/assets/garden-pink.png' },
+  { id: 'purple', label: 'Purple flower', flowerImage: '/assets/bunga ungu.png', plotImage: '/assets/garden-purple.png' },
+  { id: 'yellow', label: 'Yellow flower', flowerImage: '/assets/bunga kuning.png', plotImage: '/assets/garden-yellow.png' },
+  { id: 'blue', label: 'Blue flower', flowerImage: '/assets/bunga biru.png', plotImage: '/assets/garden-blue.png' },
+]
+
+function KidsGarden({ onBack }: { onBack: () => void }) {
+  const [plots, setPlots] = useState<(GardenFlower | null)[]>(Array(16).fill(null))
+  const [selectedFlower, setSelectedFlower] = useState<GardenFlower>('pink')
+  const [dragging, setDragging] = useState<{ flower: GardenFlower; x: number; y: number } | null>(null)
+
+  function plantFlower(index: number, flower = selectedFlower) {
+    setPlots(current => current.map((value, plotIndex) => plotIndex === index ? flower : value))
+  }
+
+  function startDrag(event: ReactPointerEvent<HTMLButtonElement>, flower: GardenFlower) {
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setSelectedFlower(flower)
+    setDragging({ flower, x: event.clientX, y: event.clientY })
+  }
+
+  function moveDrag(event: ReactPointerEvent<HTMLElement>) {
+    if (dragging) setDragging(current => current && ({ ...current, x: event.clientX, y: event.clientY }))
+  }
+
+  function finishDrag(event: ReactPointerEvent<HTMLElement>) {
+    if (!dragging) return
+    const target = document.elementFromPoint(event.clientX, event.clientY)
+    const plot = target?.closest<HTMLElement>('[data-garden-plot]')
+    if (plot) plantFlower(Number(plot.dataset.gardenPlot), dragging.flower)
+    setDragging(null)
+  }
+
+  return <section
+    className={`kids-garden${dragging ? ' is-dragging' : ''}`}
+    aria-labelledby="garden-title"
+    onPointerMove={moveDrag}
+    onPointerUp={finishDrag}
+    onPointerCancel={() => setDragging(null)}
+  >
+    <button className="garden-back" onClick={onBack} aria-label="Back to games"><Icon name="chevron" size={20} /></button>
+    <div className="garden-heading">
+      <h1 id="garden-title">Bunny’s Garden</h1>
+      <p>Drag a flower to a garden patch</p>
+    </div>
+
+    <div className="garden-play-area">
+      <img className="garden-butterfly butterfly-one" src="/assets/kupu ungu.png" alt="" />
+      <img className="garden-butterfly butterfly-two" src="/assets/kupu biru.png" alt="" />
+      <img className="garden-butterfly butterfly-three" src="/assets/kupu ungu.png" alt="" />
+      <div className="garden-grid" aria-label="Garden patches">
+        {plots.map((flower, index) => {
+          const plantedFlower = GARDEN_FLOWERS.find(option => option.id === flower)
+          return <button
+            className={`garden-plot${flower ? ' planted' : ''}`}
+            data-garden-plot={index}
+            key={index}
+            aria-label={flower ? `Garden patch ${index + 1}, planted with ${plantedFlower?.label}` : `Empty garden patch ${index + 1}. Plant selected flower`}
+            onClick={() => plantFlower(index)}
+          >
+            <img src={plantedFlower?.plotImage ?? '/assets/petak rumput.png'} alt="" draggable={false} />
+          </button>
+        })}
+      </div>
+    </div>
+
+    <div className="garden-picker">
+      <p>Choose your flower</p>
+      <div className="garden-flower-options" role="group" aria-label="Flowers to drag">
+        {GARDEN_FLOWERS.map(flower => <button
+          className={selectedFlower === flower.id ? 'selected' : ''}
+          key={flower.id}
+          aria-label={`${flower.label}. Drag to a garden patch`}
+          aria-pressed={selectedFlower === flower.id}
+          onPointerDown={event => startDrag(event, flower.id)}
+          onClick={() => setSelectedFlower(flower.id)}
+        >
+          <img src={flower.flowerImage} alt="" draggable={false} />
+        </button>)}
+      </div>
+    </div>
+
+    <img className="garden-bunny" src="/assets/schedule-bunny.png" alt="MedBunny sitting beside the flower garden" />
+    {dragging && <img
+      className="garden-drag-preview"
+      src={GARDEN_FLOWERS.find(flower => flower.id === dragging.flower)?.flowerImage}
+      alt=""
+      style={{ left: dragging.x, top: dragging.y }}
+    />}
+  </section>
+}
+
+const MATCH_UP_CARDS = [
+  { id: 'star-one', pair: 'star', label: 'Happy star', image: '/assets/kartu star.png' },
+  { id: 'heart-one', pair: 'heart', label: 'Medicine heart', image: '/assets/kartu hati.png' },
+  { id: 'flower-one', pair: 'flower', label: 'Blue flower', image: '/assets/kartu bunga.png' },
+  { id: 'heart-two', pair: 'heart', label: 'Medicine heart', image: '/assets/kartu hati.png' },
+  { id: 'flower-two', pair: 'flower', label: 'Blue flower', image: '/assets/kartu bunga.png' },
+  { id: 'star-two', pair: 'star', label: 'Happy star', image: '/assets/kartu star.png' },
+]
+
+function KidsMatchUp({ onBack }: { onBack: () => void }) {
+  const [flipped, setFlipped] = useState<number[]>([])
+  const [matched, setMatched] = useState<string[]>([])
+  const [checking, setChecking] = useState(false)
+  const checkTimer = useRef<number | null>(null)
+  const complete = matched.length === 3
+
+  useEffect(() => () => {
+    if (checkTimer.current) window.clearTimeout(checkTimer.current)
+  }, [])
+
+  function chooseCard(index: number) {
+    const card = MATCH_UP_CARDS[index]
+    if (!card || checking || flipped.includes(index) || matched.includes(card.pair)) return
+
+    const nextFlipped = [...flipped, index]
+    setFlipped(nextFlipped)
+    if (nextFlipped.length < 2) return
+
+    const firstCard = MATCH_UP_CARDS[nextFlipped[0]]
+    const isMatch = firstCard.pair === card.pair
+    setChecking(true)
+    checkTimer.current = window.setTimeout(() => {
+      if (isMatch) setMatched(current => [...current, card.pair])
+      setFlipped([])
+      setChecking(false)
+    }, isMatch ? 450 : 850)
+  }
+
+  function restartGame() {
+    if (checkTimer.current) window.clearTimeout(checkTimer.current)
+    setFlipped([])
+    setMatched([])
+    setChecking(false)
+  }
+
+  return <section className="kids-match-up" aria-labelledby="match-up-title">
+    <button className="match-up-back" onClick={onBack} aria-label="Back to games"><Icon name="chevron" size={20} /></button>
+    <div className="match-up-heading">
+      <h1 id="match-up-title">Bunny’s Match-Up</h1>
+      <p>Click 2 cards with the same image</p>
+    </div>
+    <div className="match-up-grid" aria-label="Memory matching cards">
+      {MATCH_UP_CARDS.map((card, index) => {
+        const isRevealed = flipped.includes(index) || matched.includes(card.pair)
+        const isMatched = matched.includes(card.pair)
+        return <button
+          className={`match-up-card${isRevealed ? ' revealed' : ''}${isMatched ? ' matched' : ''}`}
+          key={card.id}
+          onClick={() => chooseCard(index)}
+          disabled={checking || isMatched}
+          aria-label={isRevealed ? `${card.label}${isMatched ? ', matched' : ''}` : `Hidden card ${index + 1}`}
+        >
+          <img src={isRevealed ? card.image : '/assets/kartu bunny.png'} alt="" draggable={false} />
+        </button>
+      })}
+    </div>
+    <img className="match-up-bunny" src="/assets/bunny-peeking.png" alt="MedBunny cheering beside the cards" />
+    {complete && <div className="match-up-complete" role="status">
+      <span><Icon name="star" size={19} /></span>
+      <strong>All pairs found!</strong>
+      <button onClick={restartGame}>Play again</button>
+    </div>}
+  </section>
+}
+
+function KidsDashboard({ name, balance, onOpenGarden, onOpenMatchUp }: { name: string; balance: number; onOpenGarden: () => void; onOpenMatchUp: () => void }) {
   const games = [
     { title: 'Bunny’s Garden', description: 'Grow a happy little garden', image: '/assets/schedule-bunny.png', tone: 'garden' },
     { title: 'Bunny Dress-Up', description: 'Pick a cute outfit for Bunny', image: '/assets/kids-dress-up.png', tone: 'dress-up' },
@@ -474,7 +645,15 @@ function KidsDashboard({ name, balance }: { name: string; balance: number }) {
     </div>
 
     <div className="kids-games-grid">
-      {games.map(game => <article className={`kids-game-card ${game.tone}`} key={game.title}>
+      {games.map(game => game.tone === 'garden' || game.tone === 'match-up' ? <button className={`kids-game-card ${game.tone}`} key={game.title} onClick={game.tone === 'garden' ? onOpenGarden : onOpenMatchUp}>
+        <span className="kids-game-decor" aria-hidden="true">✦</span>
+        <img src={game.image} alt="" />
+        <div>
+          <h3>{game.title}</h3>
+          <p>{game.description}</p>
+          <span className="kids-play-label">Play now <Icon name="chevron" size={15} /></span>
+        </div>
+      </button> : <article className={`kids-game-card ${game.tone}`} key={game.title}>
         <span className="kids-game-decor" aria-hidden="true">✦</span>
         <img src={game.image} alt="" />
         <div>
@@ -494,6 +673,7 @@ export default function App() {
   const [page, setPage] = useState('Home')
   const [previousPage, setPreviousPage] = useState('Home')
   const [mode, setMode] = useState('Parent mode')
+  const [kidsScreen, setKidsScreen] = useState<'dashboard' | 'garden' | 'match-up'>('dashboard')
   const [modeMenuOpen, setModeMenuOpen] = useState(false)
   const [pinOpen, setPinOpen] = useState(false)
   const [pin, setPin] = useState('')
@@ -645,8 +825,19 @@ export default function App() {
     return <div className="app-loading"><img src="/assets/bunny-sleeping.png" alt="" /><p>Getting your routine ready…</p></div>
   }
 
+  if (screen === 'garden-preview') return <div className="app kids-active garden-preview-app">
+    <aside className="sidebar">
+      <button className="logo garden-preview-logo" aria-label="Back to MedBunny" onClick={() => setScreen('landing')}><img src="/assets/logo.png" alt="MedBunny rabbit logo" /></button>
+    </aside>
+    <main className="kids-main">
+      <header><button className="mode garden-preview-mode" onClick={() => setScreen('landing')}><Icon name="chevron" size={15} />Kids mode preview</button></header>
+      <div className="page-content kids-page-content">
+        {kidsScreen === 'garden' ? <KidsGarden onBack={() => setKidsScreen('dashboard')} /> : kidsScreen === 'match-up' ? <KidsMatchUp onBack={() => setKidsScreen('dashboard')} /> : <KidsDashboard name="Bunny" balance={0} onOpenGarden={() => setKidsScreen('garden')} onOpenMatchUp={() => setKidsScreen('match-up')} />}
+      </div>
+    </main>
+  </div>
   if (screen === 'landing') return <LandingPage onLogin={() => setScreen('login')} onSignup={() => setScreen('signup')} />
-  if (screen === 'login' || screen === 'signup') return <AuthPage mode={screen} onBack={() => setScreen('landing')} onSwitch={() => setScreen(screen === 'login' ? 'signup' : 'login')} onSubmit={handleAuthSubmit} />
+  if (screen === 'login' || screen === 'signup') return <AuthPage mode={screen} onBack={() => setScreen('landing')} onSwitch={() => setScreen(screen === 'login' ? 'signup' : 'login')} onSubmit={handleAuthSubmit} onPreviewGarden={() => { setKidsScreen('dashboard'); setScreen('garden-preview') }} />
 
   if (!session) return <LandingPage onLogin={() => setScreen('login')} onSignup={() => setScreen('signup')} />
   if (!child) return <div className="app-loading"><img src="/assets/bunny-sleeping.png" alt="" /><p>No child profile found for this account.</p></div>
@@ -689,6 +880,7 @@ export default function App() {
     event.preventDefault()
     if (pin.length !== 4) return
     setMode('Kids mode')
+    setKidsScreen('dashboard')
     setPage('Home')
     closePinDialog()
   }
@@ -698,7 +890,7 @@ export default function App() {
 
   return <div className={`app ${isKidsMode ? 'kids-active' : ''}`}>
     <aside className="sidebar">
-      <a className="logo" href="#" aria-label="MedBunny home" onClick={() => setPage('Home')}><img src="/assets/logo.png" alt="MedBunny rabbit logo" /></a>
+      <a className="logo" href="#" aria-label="MedBunny home" onClick={() => { setPage('Home'); setKidsScreen('dashboard') }}><img src="/assets/logo.png" alt="MedBunny rabbit logo" /></a>
       {!isKidsMode && <nav>{['Home', 'Schedule', 'History'].map(item => <button key={item} className={`nav-item ${page === item ? 'active' : ''}`} onClick={() => { setPage(item); if (item !== 'Home') setPreviousPage(item) }}><Icon name={item.toLowerCase()} /><span>{item}</span></button>)}</nav>}
       {!isKidsMode && <div className="sidebar-bottom"><span className="little-heart"><Icon name="heart" size={21} /></span><span>A little care,<br />every day.</span></div>}
     </aside>
@@ -728,6 +920,7 @@ export default function App() {
                     setPinOpen(true)
                   } else {
                     setMode('Parent mode')
+                    setKidsScreen('dashboard')
                   }
                 }}
               >
@@ -742,7 +935,7 @@ export default function App() {
         </div>
         <button className="avatar" aria-label={isKidsMode ? `${childName}'s profile` : 'Open profile'} aria-current={page === 'Profile' ? 'page' : undefined} onClick={() => { if (!isKidsMode && page !== 'Profile') { setPreviousPage(page); setPage('Profile') } }}>{isKidsMode ? childName.charAt(0).toUpperCase() : avatarLetter}</button></header>
       <div className={`page-content ${isKidsMode ? 'kids-page-content' : ''}`}>
-        {isKidsMode ? <KidsDashboard name={childName} balance={homeData.balance} /> : page === 'Profile' ? <ProfilePage user={session.user} child={child} onBack={() => setPage(previousPage)} onLogout={() => void handleLogout()} /> : page === 'Schedule' ? <MedicationSchedule childId={child.id} onChanged={() => setHomeRefresh(value => value + 1)} /> : page === 'History' ? <MedicationHistory childId={child.id} /> : <>
+        {isKidsMode ? kidsScreen === 'garden' ? <KidsGarden onBack={() => setKidsScreen('dashboard')} /> : kidsScreen === 'match-up' ? <KidsMatchUp onBack={() => setKidsScreen('dashboard')} /> : <KidsDashboard name={childName} balance={homeData.balance} onOpenGarden={() => setKidsScreen('garden')} onOpenMatchUp={() => setKidsScreen('match-up')} /> : page === 'Profile' ? <ProfilePage user={session.user} child={child} onBack={() => setPage(previousPage)} onLogout={() => void handleLogout()} /> : page === 'Schedule' ? <MedicationSchedule childId={child.id} onChanged={() => setHomeRefresh(value => value + 1)} /> : page === 'History' ? <MedicationHistory childId={child.id} /> : <>
           <div className="greeting"><div><div className="eyebrow">A LITTLE CARE GOES A LONG WAY</div><h1>{greeting}, {session.user.name.split(' ')[0]}!<span className="greeting-sun"><Icon name="sun" size={30} /></span></h1><p>{now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} <span>·</span> Let's make today a healthy one.</p></div><div className="greeting-clock"><span>LOCAL TIME</span><time dateTime={now.toTimeString().slice(0, 5)}>{clockTime[0]} <small>{clockTime[1]}</small></time></div></div>
           <section className="top-grid">
             <div className="week-card"><div className="section-heading"><h2>Your week at a glance</h2><span className="week-month"><span className="week-month-text">{now.toLocaleDateString('en-US', { month: 'long' })}</span></span></div><div className="week" aria-label={`Week of ${weekStart.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}–${weekEnd.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`}>{weekDays.map(day => <div key={day.key} className={`week-day${day.isToday ? ' selected' : ''}`} aria-current={day.isToday ? 'date' : undefined}><span>{day.label}</span><strong>{day.date}</strong><i className={day.hasDose ? 'has-dose' : ''} /></div>)}</div></div>
