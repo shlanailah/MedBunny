@@ -511,7 +511,7 @@ main > header{height:64px;align-items:flex-end}
 .auth-submit:disabled,.review-save:disabled,.take-button:disabled,.proof-cancel:disabled{opacity:.55;cursor:not-allowed}
 
 /* Header mode menu */
-.mode-menu-wrap{position:relative}
+.mode-menu-wrap{position:relative;z-index:30}
 .mode-menu-wrap .mode{position:relative;z-index:2}
 .mode-chevron{display:inline-flex;transition:transform .2s}
 .mode-chevron.open{transform:rotate(180deg)}

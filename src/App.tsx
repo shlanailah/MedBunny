@@ -1769,7 +1769,7 @@ export default function App() {
             </div>
           )}
         </div>
-        <button className="avatar" aria-label={isKidsMode ? `${childName}'s profile` : 'Open profile'} aria-current={page === 'Profile' ? 'page' : undefined} onClick={openProfile}>{isKidsMode ? childName.charAt(0).toUpperCase() : avatarLetter}</button></header>
+        {!isKidsMode && <button className="avatar" aria-label="Open profile" aria-current={page === 'Profile' ? 'page' : undefined} onClick={openProfile}>{avatarLetter}</button>}</header>
       <div className={`page-content ${isKidsMode ? 'kids-page-content' : ''}`}>
         {isKidsMode ? kidsScreen === 'dashboard' ? (kidsState
           ? <KidsDashboard kidsState={kidsState} onPlay={requestPlay} message={kidsMessage} />
